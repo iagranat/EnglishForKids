@@ -1,0 +1,101 @@
+import React, { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+} from 'react-native-safe-area-context';
+
+import { Header } from './src/components/Header';
+import { TabNavigation, AppTab } from './src/components/TabNavigation';
+import { LettersScreen } from './src/screens/LettersScreen';
+import { CaseMatchScreen } from './src/screens/CaseMatchScreen';
+import { PhonicsQuizScreen } from './src/screens/PhonicsQuizScreen';
+import { TracingScreen } from './src/screens/TracingScreen';
+import { WordBlendScreen } from './src/screens/WordBlendScreen';
+import { LetterItem, ALPHABET_DATA } from './src/data/alphabetData';
+
+export default function App() {
+  const [currentTab, setCurrentTab] = useState<AppTab>('letters');
+  const [stars, setStars] = useState(10); // Start with 10 welcome stars!
+  const [showHebrewHints, setShowHebrewHints] = useState(true);
+  const [tracingLetter, setTracingLetter] = useState<LetterItem>(ALPHABET_DATA[0]);
+
+  const handleAddStars = (amount: number) => {
+    setStars((prev) => prev + amount);
+  };
+
+  const handleGoToTrace = (letter: LetterItem) => {
+    setTracingLetter(letter);
+    setCurrentTab('trace');
+  };
+
+  const renderScreen = () => {
+    switch (currentTab) {
+      case 'letters':
+        return (
+          <LettersScreen
+            showHebrewHints={showHebrewHints}
+            onGoToTrace={handleGoToTrace}
+          />
+        );
+      case 'match':
+        return (
+          <CaseMatchScreen
+            showHebrewHints={showHebrewHints}
+            onAddStars={handleAddStars}
+          />
+        );
+      case 'quiz':
+        return (
+          <PhonicsQuizScreen
+            showHebrewHints={showHebrewHints}
+            onAddStars={handleAddStars}
+          />
+        );
+      case 'trace':
+        return (
+          <TracingScreen
+            showHebrewHints={showHebrewHints}
+            initialLetter={tracingLetter}
+            onAddStars={handleAddStars}
+          />
+        );
+      case 'blend':
+        return (
+          <WordBlendScreen
+            showHebrewHints={showHebrewHints}
+            onAddStars={handleAddStars}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <StatusBar style="dark" />
+        <Header
+          stars={stars}
+          showHebrewHints={showHebrewHints}
+          onToggleHebrewHints={() => setShowHebrewHints((prev) => !prev)}
+        />
+        <View style={styles.contentContainer}>{renderScreen()}</View>
+        <TabNavigation currentTab={currentTab} onSelectTab={setCurrentTab} />
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+});

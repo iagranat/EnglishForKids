@@ -1,0 +1,109 @@
+name: Build and Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🛎️ Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🏗️ Expo Prebuild (Generate Native Android Project)
+        run: npx expo prebuild --platform android --clean
+
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 🔨 Build Android Release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: 📋 Prepare APK for Release
+        run: |
+          mkdir -p build-output
+          cp android/app/build/outputs/apk/release/app-release.apk build-output/EnglishForKids.apk
+          echo "APK successfully generated and renamed to EnglishForKids.apk"
+          ls -lh build-output/EnglishForKids.apk
+
+      - name: 📤 Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EnglishForKids-apk
+          path: build-output/EnglishForKids.apk
+          retention-days: 14
+
+      - name: 🏷️ Set Release Tag & Information
+        id: vars
+        run: |
+          TAG_NAME="v1.0.${{ github.run_number }}"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_OUTPUT
+
+      - name: 🚀 Publish GitHub Release with Direct APK Link
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag_name }}
+          name: "English For Kids ${{ steps.vars.outputs.tag_name }} (${{ steps.vars.outputs.short_sha }})"
+          body: |
+            ## 📱 English For Kids (לימוד אנגלית לילדים) - Android Release
+
+            ### 📥 Direct APK Download Link
+            👉 **[Download EnglishForKids.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag_name }}/EnglishForKids.apk)**
+
+            ---
+
+            ### 📋 Build Details
+            - **Commit**: [${{ steps.vars.outputs.short_sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            - **Commit Message**: `${{ github.event.head_commit.message }}`
+            - **Build Run**: [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - **Built At**: ${{ steps.vars.outputs.date }}
+
+            ---
+
+            ### 📲 How to Install on your Phone / Tablet:
+            1. Tap the direct download link above on your Android device: **[Download EnglishForKids.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag_name }}/EnglishForKids.apk)**.
+            2. When download finishes, open the file and tap **Install**.
+            3. If Android prompts *"Install unknown apps"*, toggle **Allow from this source**.
+            4. Open **English Explorer** and start learning! 🎉
+          files: build-output/EnglishForKids.apk
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
