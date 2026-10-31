@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, BackHandler } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
   SafeAreaProvider,
@@ -19,11 +19,18 @@ import { geminiTts, GeminiVoiceName } from './src/services/geminiTtsService';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<AppTab>('letters');
+  const [tabHistory, setTabHistory] = useState<AppTab[]>(['letters']);
   const [stars, setStars] = useState(10); // Start with 10 welcome stars!
   const [showHebrewHints, setShowHebrewHints] = useState(true);
   const [tracingLetter, setTracingLetter] = useState<LetterItem>(ALPHABET_DATA[0]);
   const [showGeminiModal, setShowGeminiModal] = useState(false);
   const [currentVoice, setCurrentVoice] = useState<GeminiVoiceName>(() => geminiTts.getVoice());
+
+  const handleSelectTab = (tab: AppTab) => {
+    if (tab === currentTab) return;
+    setCurrentTab(tab);
+    setTabHistory((prev) => [...prev, tab]);
+  };
 
   const handleAddStars = (amount: number) => {
     setStars((prev) => prev + amount);
@@ -31,8 +38,47 @@ export default function App() {
 
   const handleGoToTrace = (letter: LetterItem) => {
     setTracingLetter(letter);
-    setCurrentTab('trace');
+    handleSelectTab('trace');
   };
+
+  // Intercept Android hardware back button
+  useEffect(() => {
+    const onBackPress = () => {
+      // 1. Close Gemini modal if open
+      if (showGeminiModal) {
+        setShowGeminiModal(false);
+        return true;
+      }
+
+      // 2. Go back to previous screen in history
+      if (tabHistory.length > 1) {
+        setTabHistory((prev) => {
+          const next = [...prev];
+          next.pop();
+          const prevTab = next[next.length - 1] || 'letters';
+          setCurrentTab(prevTab);
+          return next;
+        });
+        return true;
+      }
+
+      // 3. If on a sub-screen without history, go to main Letters tab
+      if (currentTab !== 'letters') {
+        setCurrentTab('letters');
+        setTabHistory(['letters']);
+        return true;
+      }
+
+      // 4. On home screen: allow system back (exit / minimize)
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress
+    );
+    return () => subscription.remove();
+  }, [showGeminiModal, tabHistory, currentTab]);
 
   const renderScreen = () => {
     switch (currentTab) {
@@ -89,7 +135,7 @@ export default function App() {
           currentVoice={currentVoice}
         />
         <View style={styles.contentContainer}>{renderScreen()}</View>
-        <TabNavigation currentTab={currentTab} onSelectTab={setCurrentTab} />
+        <TabNavigation currentTab={currentTab} onSelectTab={handleSelectTab} />
 
         <GeminiSettingsModal
           visible={showGeminiModal}
