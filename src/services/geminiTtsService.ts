@@ -87,6 +87,7 @@ class GeminiTtsService {
   private precacheQueue: PrecacheItem[] = [];
   private precacheActive = false;
   private queuedSet: Set<string> = new Set();
+  private inFlightRequests: Map<string, Promise<string | null>> = new Map();
 
   constructor() {
     this.init();
@@ -168,6 +169,7 @@ class GeminiTtsService {
     const hash = this.hashString(cacheKey);
 
     if (this.memoryCache.has(hash)) return true;
+    if (this.inFlightRequests.has(hash)) return true;
     if (Platform.OS !== 'web' && FileSystem.cacheDirectory) {
       const diskPath = `${FileSystem.cacheDirectory}gemini_v2_${hash}.wav`;
       const info = await FileSystem.getInfoAsync(diskPath);
@@ -279,81 +281,93 @@ class GeminiTtsService {
       }
     }
 
-    try {
-      // Prioritize low-latency 3.8-flash-lite-tts, then 2.5-flash-preview-tts, then 3.8-flash-tts
-      const models = ['gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts', 'gemini-3.8-flash-tts'];
-      let base64Audio: string | null = null;
-      let returnedMime = 'audio/wav';
+    // 3. Check in-flight requests (concurrent deduplication)
+    if (this.inFlightRequests.has(hash)) {
+      return await this.inFlightRequests.get(hash)!;
+    }
 
-      for (const model of models) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+    const fetchPromise = (async (): Promise<string | null> => {
+      try {
+        // Prioritize low-latency 3.8-flash-lite-tts, then 2.5-flash-preview-tts, then 3.8-flash-tts
+        const models = ['gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts', 'gemini-3.8-flash-tts'];
+        let base64Audio: string | null = null;
+        let returnedMime = 'audio/wav';
 
-        try {
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: cleanText }] }],
-              generationConfig: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: { voiceName: activeVoice },
+        for (const model of models) {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+
+          try {
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: cleanText }] }],
+                generationConfig: {
+                  responseModalities: ['AUDIO'],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: { voiceName: activeVoice },
+                    },
                   },
                 },
-              },
-            }),
-          });
+              }),
+            });
 
-          if (res.ok) {
-            const data = await res.json();
-            const inline = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-            if (inline?.data) {
-              base64Audio = inline.data;
-              returnedMime = inline.mimeType || 'audio/wav';
-              break;
+            if (res.ok) {
+              const data = await res.json();
+              const inline = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+              if (inline?.data) {
+                base64Audio = inline.data;
+                returnedMime = inline.mimeType || 'audio/wav';
+                break;
+              }
+            } else {
+              const errText = await res.text();
+              console.warn(`Gemini TTS (${model}) error:`, errText);
             }
-          } else {
-            const errText = await res.text();
-            console.warn(`Gemini TTS (${model}) error:`, errText);
+          } catch (fetchErr) {
+            console.warn(`Gemini TTS fetch error (${model}):`, fetchErr);
           }
-        } catch (fetchErr) {
-          console.warn(`Gemini TTS fetch error (${model}):`, fetchErr);
         }
-      }
 
-      if (!base64Audio) {
-        return null;
-      }
+        if (!base64Audio) {
+          return null;
+        }
 
-      // If audio is raw PCM, add standard WAV header
-      let finalBase64 = base64Audio;
-      if (returnedMime.includes('pcm') || returnedMime.includes('L16')) {
-        const pcmBytes = base64ToUint8Array(base64Audio);
-        const wavBytes = pcmToWav(pcmBytes, 24000);
-        finalBase64 = uint8ArrayToBase64(wavBytes);
-      }
+        // If audio is raw PCM, add standard WAV header
+        let finalBase64 = base64Audio;
+        if (returnedMime.includes('pcm') || returnedMime.includes('L16')) {
+          const pcmBytes = base64ToUint8Array(base64Audio);
+          const wavBytes = pcmToWav(pcmBytes, 24000);
+          finalBase64 = uint8ArrayToBase64(wavBytes);
+        }
 
-      if (Platform.OS === 'web') {
-        const dataUri = `data:audio/wav;base64,${finalBase64}`;
-        this.memoryCache.set(hash, dataUri);
+        if (Platform.OS === 'web') {
+          const dataUri = `data:audio/wav;base64,${finalBase64}`;
+          this.memoryCache.set(hash, dataUri);
+          this.notifyListeners();
+          return dataUri;
+        }
+
+        // Write to disk on mobile
+        const diskPath = `${FileSystem.cacheDirectory}gemini_v2_${hash}.wav`;
+        await FileSystem.writeAsStringAsync(diskPath, finalBase64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        this.memoryCache.set(hash, diskPath);
         this.notifyListeners();
-        return dataUri;
+        return diskPath;
+      } catch (err) {
+        console.warn('Gemini generateSpeech unexpected error:', err);
+        return null;
+      } finally {
+        this.inFlightRequests.delete(hash);
       }
+    })();
 
-      // Write to disk on mobile
-      const diskPath = `${FileSystem.cacheDirectory}gemini_v2_${hash}.wav`;
-      await FileSystem.writeAsStringAsync(diskPath, finalBase64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      this.memoryCache.set(hash, diskPath);
-      this.notifyListeners();
-      return diskPath;
-    } catch (err) {
-      console.warn('Gemini generateSpeech unexpected error:', err);
-      return null;
-    }
+    this.inFlightRequests.set(hash, fetchPromise);
+    return await fetchPromise;
   }
 
   /**
@@ -397,6 +411,38 @@ class GeminiTtsService {
 
   getPrewarmProgress() {
     return this.prewarmProgress;
+  }
+
+  /**
+   * Fast-path pre-fetch: initiates speech generation immediately in the background
+   * without waiting in queue. Ideal for transition windows when a sound is already playing.
+   */
+  async prefetchImmediate(text: string, voiceOverride?: GeminiVoiceName): Promise<void> {
+    if (!this.hasApiKey() || this.voiceMode === 'native') return;
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    const activeVoice = voiceOverride || this.voice;
+    const cacheKey = `v2_${activeVoice}_${cleanText.toLowerCase()}`;
+    const hash = this.hashString(cacheKey);
+
+    // Fast check if already cached on disk/memory or actively downloading
+    if (this.memoryCache.has(hash)) return;
+    if (this.inFlightRequests.has(hash)) return;
+    const cached = await this.isCached(cleanText, activeVoice);
+    if (cached) return;
+
+    const key = `${activeVoice}:${cleanText.toLowerCase()}`;
+
+    this.queuedSet.add(key);
+
+    this.generateSpeech(cleanText, activeVoice)
+      .catch((err) => {
+        console.warn('prefetchImmediate error:', err);
+      })
+      .finally(() => {
+        this.queuedSet.delete(key);
+      });
   }
 
   /**
@@ -553,14 +599,28 @@ class GeminiTtsService {
 
     // Mode 2: Hybrid or Gemini
     if (this.hasApiKey()) {
-      // If phrase is ALREADY in disk cache -> 0ms instant playback!
-      const isCachedAlready = await this.isCached(text, options?.voice);
-      if (isCachedAlready) {
-        const audioUri = await this.generateSpeech(text, options?.voice);
-        if (audioUri) {
-          await this.playAudioUri(audioUri, options?.onDone);
-          return;
+      const cleanText = text.trim();
+      const activeVoice = options?.voice || this.voice;
+      const cacheKey = `v2_${activeVoice}_${cleanText.toLowerCase()}`;
+      const hash = this.hashString(cacheKey);
+
+      // Check if ALREADY cached in memory, on disk, OR actively in-flight!
+      let audioUri: string | null = null;
+      if (this.memoryCache.has(hash)) {
+        audioUri = this.memoryCache.get(hash)!;
+      } else if (this.inFlightRequests.has(hash)) {
+        // Pre-fetch is actively in-flight: wait directly for it!
+        audioUri = await this.inFlightRequests.get(hash)!;
+      } else {
+        const isCachedAlready = await this.isCached(cleanText, activeVoice);
+        if (isCachedAlready) {
+          audioUri = await this.generateSpeech(cleanText, activeVoice);
         }
+      }
+
+      if (audioUri) {
+        await this.playAudioUri(audioUri, options?.onDone);
+        return;
       }
 
       // If in Hybrid mode and NOT cached yet:

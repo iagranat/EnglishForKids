@@ -63,6 +63,17 @@ export const WordBlendScreen: React.FC<WordBlendScreenProps> = ({
 
   const handleBlendWord = async () => {
     setBlended(true);
+
+    // Pre-cache upcoming word blend sentence immediately while current word is being spoken
+    const nextIndex = (currentIndex + 1) % CVC_WORDS.length;
+    const nextWord = CVC_WORDS[nextIndex];
+    if (nextWord) {
+      const nextPhonics = nextWord.letters.map((char) => getPhonicsSoundForChar(char));
+      const nextSpaced = nextPhonics.join(' ... ');
+      const nextBlendPhrase = `${nextSpaced} ... ${nextWord.word}! ${nextWord.word} means ${nextWord.hebrew}.`;
+      geminiTts.prefetchImmediate(nextBlendPhrase);
+    }
+
     await soundService.playSuccessSound();
 
     // Speak phonics sound of each letter then the full blended word

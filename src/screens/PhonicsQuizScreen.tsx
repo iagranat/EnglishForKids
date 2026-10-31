@@ -33,18 +33,19 @@ const createQuizQuestion = (): QuizQuestion => {
   return { targetLetter: target, options, type: questionType };
 };
 
-const playPromptAudio = async (target: LetterItem, type: 'phonics' | 'word') => {
+export const getPromptText = (target: LetterItem, type: 'phonics' | 'word'): string => {
   if (type === 'phonics') {
-    await soundService.speak(
-      `Listen carefully. Which letter makes the sound: ${target.phonics}? ... ${target.phonics}!`,
-      { rate: 0.8, pitch: 1.05 }
-    );
-  } else {
-    await soundService.speak(
-      `Which letter starts the word: ${target.exampleWord}?`,
-      { rate: 0.85, pitch: 1.05 }
-    );
+    return `Listen carefully. Which letter makes the sound: ${target.phonics}? ... ${target.phonics}!`;
   }
+  return `Which letter starts the word: ${target.exampleWord}?`;
+};
+
+const playPromptAudio = async (target: LetterItem, type: 'phonics' | 'word') => {
+  const text = getPromptText(target, type);
+  await soundService.speak(text, {
+    rate: type === 'phonics' ? 0.8 : 0.85,
+    pitch: 1.05,
+  });
 };
 
 const getCorrectResponseText = (target: LetterItem): string => {
@@ -75,6 +76,10 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
   const [isAnswering, setIsAnswering] = useState(false);
 
   useEffect(() => {
+    // 0. Fast-path pre-fetch current question prompt if not cached yet
+    const currentPrompt = getPromptText(currentQuestion.targetLetter, currentQuestion.type);
+    geminiTts.prefetchImmediate(currentPrompt);
+
     // 1. Play current question audio promptly
     const timer = setTimeout(() => {
       playPromptAudio(currentQuestion.targetLetter, currentQuestion.type);
@@ -102,15 +107,12 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
     geminiTts.prefetch('Five in a row! You are an absolute phonics superstar!', undefined, 'normal');
 
     // 3. Predictive background prefetch for the NEXT question!
-    // While the child answers the current question, Gemini AI audio for next question
-    // (both prompt sentence and options) is downloaded and cached silently in the background
+    // While the child is looking at or answering the current question,
+    // pre-fetch the next card's prompt so it's ready in advance.
     const nextQ = nextQuestionRef.current;
     if (nextQ) {
-      const nextPrompt =
-        nextQ.type === 'phonics'
-          ? `Listen carefully. Which letter makes the sound: ${nextQ.targetLetter.phonics}? ... ${nextQ.targetLetter.phonics}!`
-          : `Which letter starts the word: ${nextQ.targetLetter.exampleWord}?`;
-      geminiTts.prefetch(nextPrompt, undefined, 'normal');
+      const nextPrompt = getPromptText(nextQ.targetLetter, nextQ.type);
+      geminiTts.prefetchImmediate(nextPrompt);
       geminiTts.prefetch(getCorrectResponseText(nextQ.targetLetter), undefined, 'normal');
     }
 
@@ -141,6 +143,17 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
     setIsAnswerCorrect(isCorrect);
 
     if (isCorrect) {
+      // 🚀 CRITICAL ZERO-LATENCY PRE-FETCH:
+      // While the current card plays the ending sound (success chime + teacher congratulations, ~4-5s),
+      // immediately start downloading the opening prompt sentence for the NEXT card!
+      // By the time the teacher finishes congratulating, the next card's audio is 100% cached on disk.
+      const nextQ = nextQuestionRef.current;
+      if (nextQ) {
+        const nextPrompt = getPromptText(nextQ.targetLetter, nextQ.type);
+        geminiTts.prefetchImmediate(nextPrompt);
+        geminiTts.prefetch(getCorrectResponseText(nextQ.targetLetter), undefined, 'high');
+      }
+
       await soundService.playSuccessSound();
       const nextStreak = streak + 1;
       setScore((prev) => prev + 10);

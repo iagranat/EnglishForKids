@@ -91,6 +91,9 @@ export const CaseMatchScreen: React.FC<CaseMatchScreenProps> = ({
       if (newMatched.length === currentPool.length) {
         setRoundCompleted(true);
         onAddStars(5);
+        // Pre-cache upcoming round letters immediately while round_complete praise plays
+        const upcomingPool = getRoundData(round + 1).pool;
+        upcomingPool.forEach((l) => geminiTts.prefetchImmediate(l.upper));
         await geminiTts.speakEncouragement('round_complete');
       } else {
         await geminiTts.speakEncouragement('match_win');
