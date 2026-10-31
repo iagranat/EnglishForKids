@@ -60,22 +60,7 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
     activeColorRef.current = activeColor;
   }, [activeColor]);
 
-  const canvasRef = useRef<React.ElementRef<typeof View>>(null);
-  const canvasLayoutRef = useRef<{ x: number; y: number; width: number; height: number }>({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-  });
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
-
-  const updateCanvasLayout = () => {
-    canvasRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
-      if (width > 0 && height > 0) {
-        canvasLayoutRef.current = { x, y, width, height };
-      }
-    });
-  };
 
   // Pre-cache sounds for active letter + upcoming letter in the alphabet
   useEffect(() => {
@@ -107,70 +92,42 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (evt: GestureResponderEvent) => {
-          canvasRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
-            if (width > 0 && height > 0) {
-              canvasLayoutRef.current = { x, y, width, height };
-            }
-          });
           lastPointRef.current = null;
+          const { locationX, locationY } = evt.nativeEvent;
 
-          const { locationX, locationY, pageX, pageY } = evt.nativeEvent;
-          const layout = canvasLayoutRef.current;
-          let x = locationX;
-          let y = locationY;
-
-          if (layout.width > 0 && layout.height > 0) {
-            const computedX = pageX - layout.x;
-            const computedY = pageY - layout.y;
-            if (
-              computedX >= 0 &&
-              computedX <= layout.width &&
-              computedY >= 0 &&
-              computedY <= layout.height
-            ) {
-              x = computedX;
-              y = computedY;
-            }
-          }
-
-          if (x >= 16 || y >= 16) {
-            lastPointRef.current = { x, y };
-            setPoints((prev) => [...prev, { x, y, color: activeColorRef.current }]);
+          // Ignore touches in the rounded corner boundary zone (< 16px)
+          if (locationX >= 16 || locationY >= 16) {
+            lastPointRef.current = { x: locationX, y: locationY };
+            setPoints((prev) => [
+              ...prev,
+              { x: locationX, y: locationY, color: activeColorRef.current },
+            ]);
           }
         },
         onPanResponderMove: (evt: GestureResponderEvent) => {
-          const { locationX, locationY, pageX, pageY } = evt.nativeEvent;
-          const layout = canvasLayoutRef.current;
-          let x = locationX;
-          let y = locationY;
+          const { locationX, locationY } = evt.nativeEvent;
 
-          if (layout.width > 0 && layout.height > 0) {
-            const computedX = pageX - layout.x;
-            const computedY = pageY - layout.y;
-            if (
-              computedX >= 0 &&
-              computedX <= layout.width &&
-              computedY >= 0 &&
-              computedY <= layout.height
-            ) {
-              x = computedX;
-              y = computedY;
-            }
-          }
-
-          if (x < 16 && y < 16) {
+          // 1. Ignore spurious noise in extreme corner
+          if (locationX < 16 && locationY < 16) {
             return;
           }
 
+          // 2. Reject sudden teleportation jump to the corner during continuous drag
           if (lastPointRef.current) {
-            const dist = Math.hypot(x - lastPointRef.current.x, y - lastPointRef.current.y);
-            if (dist > 75 && (x < 35 || y < 35)) {
+            const dist = Math.hypot(
+              locationX - lastPointRef.current.x,
+              locationY - lastPointRef.current.y
+            );
+            if (dist > 75 && (locationX < 35 || locationY < 35)) {
               return;
             }
           }
 
-          lastPointRef.current = { x, y };
-          setPoints((prev) => [...prev, { x, y, color: activeColorRef.current }]);
+          lastPointRef.current = { x: locationX, y: locationY };
+          setPoints((prev) => [
+            ...prev,
+            { x: locationX, y: locationY, color: activeColorRef.current },
+          ]);
         },
         onPanResponderRelease: () => {
           lastPointRef.current = null;
@@ -372,13 +329,7 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
       </View>
 
       {/* Tracing Canvas Area */}
-      <View
-        ref={canvasRef}
-        collapsable={false}
-        onLayout={updateCanvasLayout}
-        style={styles.canvasContainer}
-        {...panResponder.panHandlers}
-      >
+      <View style={styles.canvasContainer} {...panResponder.panHandlers}>
         <View
           style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
           pointerEvents="none"
