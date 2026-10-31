@@ -1,21 +1,78 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createAudioPlayer, AudioPlayer } from 'expo-audio';
-import { soundService } from './soundService';
+import { createAudioPlayer, AudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { nativeSpeech } from './nativeSpeechService';
 import { DEFAULT_API_KEY, DEFAULT_VOICE } from '../config/geminiConfig';
+import { LetterItem } from '../data/alphabetData';
 
 const STORAGE_KEY_API_KEY = '@english_kids_gemini_api_key';
 const STORAGE_KEY_VOICE = '@english_kids_gemini_voice';
 
 export type GeminiVoiceName = 'Puck' | 'Aoede' | 'Fenrir' | 'Kore';
 
+/**
+ * Wraps raw PCM 16-bit 24kHz mono audio with a 44-byte RIFF/WAVE header
+ */
+function pcmToWav(pcmBytes: Uint8Array, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Uint8Array {
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  const dataLen = pcmBytes.length;
+  const fileLen = dataLen + 36;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+
+  // RIFF
+  view.setUint8(0, 0x52); view.setUint8(1, 0x49); view.setUint8(2, 0x46); view.setUint8(3, 0x46);
+  view.setUint32(4, fileLen, true);
+  // WAVE
+  view.setUint8(8, 0x57); view.setUint8(9, 0x41); view.setUint8(10, 0x56); view.setUint8(11, 0x45);
+  // fmt 
+  view.setUint8(12, 0x66); view.setUint8(13, 0x6d); view.setUint8(14, 0x74); view.setUint8(15, 0x20);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  // data
+  view.setUint8(36, 0x64); view.setUint8(37, 0x61); view.setUint8(38, 0x74); view.setUint8(39, 0x61);
+  view.setUint32(40, dataLen, true);
+
+  const wavBytes = new Uint8Array(44 + dataLen);
+  wavBytes.set(new Uint8Array(header), 0);
+  wavBytes.set(pcmBytes, 44);
+  return wavBytes;
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const len = bytes.byteLength;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
 class GeminiTtsService {
   private apiKey: string = DEFAULT_API_KEY;
-  private voice: GeminiVoiceName = DEFAULT_VOICE; // Default configured voice
-  private isGenerating: boolean = false;
+  private voice: GeminiVoiceName = DEFAULT_VOICE;
   private memoryCache: Map<string, string> = new Map();
   private currentPlayer: AudioPlayer | null = null;
+  private isGenerating = false;
 
   constructor() {
     this.init();
@@ -25,8 +82,13 @@ class GeminiTtsService {
     try {
       const savedKey = await AsyncStorage.getItem(STORAGE_KEY_API_KEY);
       const savedVoice = await AsyncStorage.getItem(STORAGE_KEY_VOICE);
-      
-      this.apiKey = savedKey || DEFAULT_API_KEY;
+
+      if (savedKey) {
+        this.apiKey = savedKey.trim().replace(/\.+$/, '');
+      } else {
+        this.apiKey = DEFAULT_API_KEY.trim().replace(/\.+$/, '');
+      }
+
       if (savedVoice) {
         this.voice = savedVoice as GeminiVoiceName;
       } else {
@@ -42,7 +104,7 @@ class GeminiTtsService {
   }
 
   async setApiKey(key: string) {
-    this.apiKey = key.trim();
+    this.apiKey = key.trim().replace(/\.+$/, '');
     await AsyncStorage.setItem(STORAGE_KEY_API_KEY, this.apiKey);
   }
 
@@ -59,9 +121,6 @@ class GeminiTtsService {
     return Boolean(this.apiKey && this.apiKey.length > 10);
   }
 
-  /**
-   * Simple hash for caching filenames
-   */
   private hashString(str: string): string {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -71,9 +130,6 @@ class GeminiTtsService {
     return Math.abs(hash).toString(36);
   }
 
-  /**
-   * Stop any current audio player
-   */
   stopCurrentPlayback() {
     try {
       if (this.currentPlayer) {
@@ -86,12 +142,9 @@ class GeminiTtsService {
     }
   }
 
-  /**
-   * Play audio from local URI or Data URI
-   */
   private async playAudioUri(uri: string, onDone?: () => void) {
     this.stopCurrentPlayback();
-    await soundService.stop();
+    await nativeSpeech.stop();
 
     if (Platform.OS === 'web') {
       try {
@@ -106,9 +159,15 @@ class GeminiTtsService {
     }
 
     try {
+      await setAudioModeAsync({ playsInSilentMode: true });
       const player = createAudioPlayer(uri);
       this.currentPlayer = player;
       player.play();
+
+      // Estimate playback duration or listen to status
+      setTimeout(() => {
+        onDone?.();
+      }, 3000);
     } catch (err) {
       console.warn('Expo-audio playback error:', err);
       onDone?.();
@@ -116,22 +175,23 @@ class GeminiTtsService {
   }
 
   /**
-   * Generate speech using Gemini 2.0 Flash Audio output
+   * Request speech generation from Gemini 3.8 Flash TTS
    */
   async generateSpeech(text: string, voiceOverride?: GeminiVoiceName): Promise<string | null> {
     if (!this.hasApiKey()) return null;
 
-    const cacheKey = `${voiceOverride || this.voice}_${text.toLowerCase().trim()}`;
+    const activeVoice = voiceOverride || this.voice;
+    const cacheKey = `${activeVoice}_${text.toLowerCase().trim()}`;
     const hash = this.hashString(cacheKey);
 
-    // Check memory cache
+    // 1. Check in-memory cache
     if (this.memoryCache.has(hash)) {
       return this.memoryCache.get(hash)!;
     }
 
-    // Check disk cache on mobile
+    // 2. Check disk cache on mobile
     if (Platform.OS !== 'web' && FileSystem.cacheDirectory) {
-      const diskPath = `${FileSystem.cacheDirectory}gemini_tts_${hash}.wav`;
+      const diskPath = `${FileSystem.cacheDirectory}gemini_${hash}.wav`;
       const info = await FileSystem.getInfoAsync(diskPath);
       if (info.exists) {
         this.memoryCache.set(hash, diskPath);
@@ -141,64 +201,73 @@ class GeminiTtsService {
 
     try {
       this.isGenerating = true;
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
 
-      const prompt = `You are a cheerful, enthusiastic phonics and English teacher for young kids. Speak this exact phrase with clear, warm pronunciation: "${text}"`;
+      // Primary model: gemini-3.8-flash-tts, fallback: gemini-2.5-flash-preview-tts
+      const models = ['gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'];
+      let base64Audio: string | null = null;
+      let returnedMime = 'audio/wav';
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: voiceOverride || this.voice,
+      for (const model of models) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+        const prompt = `Speak as a friendly phonics teacher for kids: "${text}"`;
+
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: activeVoice },
+                  },
                 },
               },
-            },
-          },
-        }),
-      });
+            }),
+          });
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.warn('Gemini Audio API error:', errorData);
+          if (res.ok) {
+            const data = await res.json();
+            const inline = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+            if (inline?.data) {
+              base64Audio = inline.data;
+              returnedMime = inline.mimeType || 'audio/wav';
+              break;
+            }
+          } else {
+            const errText = await res.text();
+            console.warn(`Gemini TTS (${model}) error:`, errText);
+          }
+        } catch (fetchErr) {
+          console.warn(`Gemini TTS fetch error (${model}):`, fetchErr);
+        }
+      }
+
+      if (!base64Audio) {
         this.isGenerating = false;
         return null;
       }
 
-      const data = await response.json();
-      const part = data.candidates?.[0]?.content?.parts?.[0];
-      const inlineData = part?.inlineData;
-
-      if (!inlineData?.data) {
-        this.isGenerating = false;
-        return null;
+      // If audio is raw PCM, add standard WAV header
+      let finalBase64 = base64Audio;
+      if (returnedMime.includes('pcm') || returnedMime.includes('L16')) {
+        const pcmBytes = base64ToUint8Array(base64Audio);
+        const wavBytes = pcmToWav(pcmBytes, 24000);
+        finalBase64 = uint8ArrayToBase64(wavBytes);
       }
-
-      const base64Data = inlineData.data;
-      const mimeType = inlineData.mimeType || 'audio/wav';
 
       if (Platform.OS === 'web') {
-        const dataUri = `data:${mimeType};base64,${base64Data}`;
+        const dataUri = `data:audio/wav;base64,${finalBase64}`;
         this.memoryCache.set(hash, dataUri);
         this.isGenerating = false;
         return dataUri;
       }
 
-      // Write to disk cache
-      const diskPath = `${FileSystem.cacheDirectory}gemini_tts_${hash}.wav`;
-      await FileSystem.writeAsStringAsync(diskPath, base64Data, {
+      // Write to disk on mobile
+      const diskPath = `${FileSystem.cacheDirectory}gemini_${hash}.wav`;
+      await FileSystem.writeAsStringAsync(diskPath, finalBase64, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
@@ -206,14 +275,14 @@ class GeminiTtsService {
       this.isGenerating = false;
       return diskPath;
     } catch (err) {
-      console.warn('Gemini TTS fetch error:', err);
+      console.warn('Gemini generateSpeech unexpected error:', err);
       this.isGenerating = false;
       return null;
     }
   }
 
   /**
-   * Speak with Gemini if available, otherwise seamlessly fallback to on-device TTS
+   * Speak using Gemini AI voice with automatic fallback to native speech
    */
   async speak(
     text: string,
@@ -230,13 +299,13 @@ class GeminiTtsService {
           await this.playAudioUri(audioUri, options?.onDone);
           return;
         }
-      } catch {
-        // Fallback below
+      } catch (err) {
+        console.warn('Gemini playback failed, falling back:', err);
       }
     }
 
-    // Graceful fallback to on-device speech
-    await soundService.speak(options?.fallbackText || text, {
+    // Seamless fallback to on-device speech
+    await nativeSpeech.speak(options?.fallbackText || text, {
       rate: 0.85,
       pitch: 1.05,
       onDone: options?.onDone,
@@ -244,7 +313,35 @@ class GeminiTtsService {
   }
 
   /**
-   * Generate expressive, cheerful encouragement for games & milestones
+   * Speak a letter's name (e.g. "The letter A")
+   */
+  async speakLetterName(letter: LetterItem) {
+    await nativeSpeech.triggerHaptic('light');
+    await this.speak(`The letter ${letter.upper}`, {
+      fallbackText: letter.upper,
+    });
+  }
+
+  /**
+   * Speak a letter's phonics sound
+   */
+  async speakPhonicsSound(letter: LetterItem) {
+    await nativeSpeech.triggerHaptic('light');
+    const phrase = `The letter ${letter.upper} says ${letter.phonics}, like in ${letter.exampleWord}. ${letter.phonics}!`;
+    await this.speak(phrase, { fallbackText: phrase });
+  }
+
+  /**
+   * Speak the example word
+   */
+  async speakWord(letter: LetterItem) {
+    await nativeSpeech.triggerHaptic('light');
+    const phrase = `${letter.exampleWord}! ${letter.upper} is for ${letter.exampleWord}.`;
+    await this.speak(phrase, { fallbackText: phrase });
+  }
+
+  /**
+   * Speak dynamic celebratory praise
    */
   async speakEncouragement(context: 'match_win' | 'streak_3' | 'streak_5' | 'blend_success' | 'round_complete') {
     const ENCOURAGEMENTS: Record<typeof context, string[]> = {
