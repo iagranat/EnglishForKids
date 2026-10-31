@@ -180,8 +180,9 @@ class GeminiTtsService {
   async generateSpeech(text: string, voiceOverride?: GeminiVoiceName): Promise<string | null> {
     if (!this.hasApiKey()) return null;
 
+    const cleanText = text.trim();
     const activeVoice = voiceOverride || this.voice;
-    const cacheKey = `${activeVoice}_${text.toLowerCase().trim()}`;
+    const cacheKey = `v2_${activeVoice}_${cleanText.toLowerCase()}`;
     const hash = this.hashString(cacheKey);
 
     // 1. Check in-memory cache
@@ -191,7 +192,7 @@ class GeminiTtsService {
 
     // 2. Check disk cache on mobile
     if (Platform.OS !== 'web' && FileSystem.cacheDirectory) {
-      const diskPath = `${FileSystem.cacheDirectory}gemini_${hash}.wav`;
+      const diskPath = `${FileSystem.cacheDirectory}gemini_v2_${hash}.wav`;
       const info = await FileSystem.getInfoAsync(diskPath);
       if (info.exists) {
         this.memoryCache.set(hash, diskPath);
@@ -209,14 +210,13 @@ class GeminiTtsService {
 
       for (const model of models) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
-        const prompt = `Speak as a friendly phonics teacher for kids: "${text}"`;
 
         try {
           const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
+              contents: [{ parts: [{ text: cleanText }] }],
               generationConfig: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
@@ -266,7 +266,7 @@ class GeminiTtsService {
       }
 
       // Write to disk on mobile
-      const diskPath = `${FileSystem.cacheDirectory}gemini_${hash}.wav`;
+      const diskPath = `${FileSystem.cacheDirectory}gemini_v2_${hash}.wav`;
       await FileSystem.writeAsStringAsync(diskPath, finalBase64, {
         encoding: FileSystem.EncodingType.Base64,
       });
