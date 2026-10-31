@@ -60,6 +60,23 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
     activeColorRef.current = activeColor;
   }, [activeColor]);
 
+  const canvasRef = useRef<React.ElementRef<typeof View>>(null);
+  const canvasLayoutRef = useRef<{ x: number; y: number; width: number; height: number }>({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  });
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  const updateCanvasLayout = () => {
+    canvasRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
+      if (width > 0 && height > 0) {
+        canvasLayoutRef.current = { x, y, width, height };
+      }
+    });
+  };
+
   // Pre-cache sounds for active letter + upcoming letter in the alphabet
   useEffect(() => {
     // 1. Current letter sounds (High priority)
@@ -85,28 +102,88 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
   // PanResponder to track touch points on canvas
   const panResponder = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (evt: GestureResponderEvent) => {
-          const { locationX, locationY } = evt.nativeEvent;
-          setPoints((prev) => [
-            ...prev,
-            { x: locationX, y: locationY, color: activeColorRef.current },
-          ]);
+          canvasRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
+            if (width > 0 && height > 0) {
+              canvasLayoutRef.current = { x, y, width, height };
+            }
+          });
+          lastPointRef.current = null;
+
+          const { locationX, locationY, pageX, pageY } = evt.nativeEvent;
+          const layout = canvasLayoutRef.current;
+          let x = locationX;
+          let y = locationY;
+
+          if (layout.width > 0 && layout.height > 0) {
+            const computedX = pageX - layout.x;
+            const computedY = pageY - layout.y;
+            if (
+              computedX >= 0 &&
+              computedX <= layout.width &&
+              computedY >= 0 &&
+              computedY <= layout.height
+            ) {
+              x = computedX;
+              y = computedY;
+            }
+          }
+
+          if (x >= 16 || y >= 16) {
+            lastPointRef.current = { x, y };
+            setPoints((prev) => [...prev, { x, y, color: activeColorRef.current }]);
+          }
         },
         onPanResponderMove: (evt: GestureResponderEvent) => {
-          const { locationX, locationY } = evt.nativeEvent;
-          setPoints((prev) => [
-            ...prev,
-            { x: locationX, y: locationY, color: activeColorRef.current },
-          ]);
+          const { locationX, locationY, pageX, pageY } = evt.nativeEvent;
+          const layout = canvasLayoutRef.current;
+          let x = locationX;
+          let y = locationY;
+
+          if (layout.width > 0 && layout.height > 0) {
+            const computedX = pageX - layout.x;
+            const computedY = pageY - layout.y;
+            if (
+              computedX >= 0 &&
+              computedX <= layout.width &&
+              computedY >= 0 &&
+              computedY <= layout.height
+            ) {
+              x = computedX;
+              y = computedY;
+            }
+          }
+
+          if (x < 16 && y < 16) {
+            return;
+          }
+
+          if (lastPointRef.current) {
+            const dist = Math.hypot(x - lastPointRef.current.x, y - lastPointRef.current.y);
+            if (dist > 75 && (x < 35 || y < 35)) {
+              return;
+            }
+          }
+
+          lastPointRef.current = { x, y };
+          setPoints((prev) => [...prev, { x, y, color: activeColorRef.current }]);
+        },
+        onPanResponderRelease: () => {
+          lastPointRef.current = null;
+        },
+        onPanResponderTerminate: () => {
+          lastPointRef.current = null;
         },
       }),
     []
   );
 
   const handleClear = () => {
+    lastPointRef.current = null;
     setPoints([]);
   };
 
@@ -295,41 +372,52 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
       </View>
 
       {/* Tracing Canvas Area */}
-      <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-        {/* Stroke counter badge */}
-        <View style={styles.strokeBadge}>
-          <Ionicons name="pencil" size={11} color="#64748B" />
-          <Text style={styles.strokeBadgeText}>
-            {points.length === 0
-              ? (showHebrewHints ? 'התחילו לכתוב' : 'Trace here')
-              : `${points.length} ${showHebrewHints ? 'נקודות' : 'strokes'}`}
-          </Text>
-        </View>
+      <View
+        ref={canvasRef}
+        collapsable={false}
+        onLayout={updateCanvasLayout}
+        style={styles.canvasContainer}
+        {...panResponder.panHandlers}
+      >
+        <View
+          style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+          pointerEvents="none"
+        >
+          {/* Stroke counter badge */}
+          <View style={styles.strokeBadge}>
+            <Ionicons name="pencil" size={11} color="#64748B" />
+            <Text style={styles.strokeBadgeText}>
+              {points.length === 0
+                ? (showHebrewHints ? 'התחילו לכתוב' : 'Trace here')
+                : `${points.length} ${showHebrewHints ? 'נקודות' : 'strokes'}`}
+            </Text>
+          </View>
 
-        {/* Background Guide Letter Outline */}
-        <View style={styles.guideLetterContainer} pointerEvents="none">
-          <Text style={styles.guideLetter}>{displayChar}</Text>
-          <Text style={styles.ltrHint}>
-            {showHebrewHints
-              ? '➡️ כותבים משמאל לימין'
-              : '➡️ Write from Left to Right'}
-          </Text>
-        </View>
+          {/* Background Guide Letter Outline */}
+          <View style={styles.guideLetterContainer}>
+            <Text style={styles.guideLetter}>{displayChar}</Text>
+            <Text style={styles.ltrHint}>
+              {showHebrewHints
+                ? '➡️ כותבים משמאל לימין'
+                : '➡️ Write from Left to Right'}
+            </Text>
+          </View>
 
-        {/* User Drawn Dots / Strokes */}
-        {points.map((pt, idx) => (
-          <View
-            key={idx}
-            style={[
-              styles.strokePoint,
-              {
-                left: pt.x - 7,
-                top: pt.y - 7,
-                backgroundColor: pt.color,
-              },
-            ]}
-          />
-        ))}
+          {/* User Drawn Dots / Strokes */}
+          {points.map((pt, idx) => (
+            <View
+              key={idx}
+              style={[
+                styles.strokePoint,
+                {
+                  left: pt.x - 7,
+                  top: pt.y - 7,
+                  backgroundColor: pt.color,
+                },
+              ]}
+            />
+          ))}
+        </View>
       </View>
 
       {/* Color Palette */}
