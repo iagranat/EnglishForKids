@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LetterItem } from '../data/alphabetData';
 import { soundService } from '../services/soundService';
+import { geminiTts } from '../services/geminiTtsService';
 
 interface LetterDetailModalProps {
   letter: LetterItem | null;
@@ -27,6 +28,19 @@ export const LetterDetailModal: React.FC<LetterDetailModalProps> = ({
   onGoToTrace,
 }) => {
   const [selectedCase, setSelectedCase] = useState<'upper' | 'lower'>('upper');
+
+  // Pre-fetch letter audio in background when modal is viewed
+  useEffect(() => {
+    if (visible && letter) {
+      geminiTts.prefetch(letter.upper);
+      geminiTts.prefetch(
+        `The letter ${letter.upper} says ${letter.phonics}, like in ${letter.exampleWord}. ${letter.phonics}!`
+      );
+      geminiTts.prefetch(
+        `${letter.exampleWord}! ${letter.upper} is for ${letter.exampleWord}.`
+      );
+    }
+  }, [visible, letter]);
 
   if (!letter) return null;
 

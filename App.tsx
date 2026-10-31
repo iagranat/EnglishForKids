@@ -15,7 +15,7 @@ import { PhonicsQuizScreen } from './src/screens/PhonicsQuizScreen';
 import { TracingScreen } from './src/screens/TracingScreen';
 import { WordBlendScreen } from './src/screens/WordBlendScreen';
 import { LetterItem, ALPHABET_DATA } from './src/data/alphabetData';
-import { geminiTts, GeminiVoiceName } from './src/services/geminiTtsService';
+import { geminiTts, GeminiVoiceName, VoiceMode } from './src/services/geminiTtsService';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<AppTab>('letters');
@@ -25,6 +25,15 @@ export default function App() {
   const [tracingLetter, setTracingLetter] = useState<LetterItem>(ALPHABET_DATA[0]);
   const [showGeminiModal, setShowGeminiModal] = useState(false);
   const [currentVoice, setCurrentVoice] = useState<GeminiVoiceName>(() => geminiTts.getVoice());
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => geminiTts.getVoiceMode());
+
+  // Background pre-warming of common alphabet sounds on app launch
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      geminiTts.prewarmCommonSounds(ALPHABET_DATA);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [currentVoice]);
 
   const handleSelectTab = (tab: AppTab) => {
     if (tab === currentTab) return;
@@ -133,16 +142,20 @@ export default function App() {
           onToggleHebrewHints={() => setShowHebrewHints((prev) => !prev)}
           onOpenGeminiSettings={() => setShowGeminiModal(true)}
           currentVoice={currentVoice}
+          voiceMode={voiceMode}
         />
         <View style={styles.contentContainer}>{renderScreen()}</View>
         <TabNavigation currentTab={currentTab} onSelectTab={handleSelectTab} />
 
         <GeminiSettingsModal
           visible={showGeminiModal}
-          onClose={(newVoice) => {
+          onClose={(newVoice, newMode) => {
             setShowGeminiModal(false);
             if (newVoice) {
               setCurrentVoice(newVoice);
+            }
+            if (newMode) {
+              setVoiceMode(newMode);
             }
           }}
         />

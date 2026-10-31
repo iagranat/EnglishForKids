@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -52,6 +52,7 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
   onAddStars,
 }) => {
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion>(createQuizQuestion);
+  const nextQuestionRef = useRef<QuizQuestion>(createQuizQuestion());
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
@@ -59,15 +60,30 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
   const [isAnswering, setIsAnswering] = useState(false);
 
   useEffect(() => {
+    // 1. Play current question audio promptly
     const timer = setTimeout(() => {
       playPromptAudio(currentQuestion.targetLetter, currentQuestion.type);
     }, 400);
+
+    // 2. Predictive background prefetch for the NEXT question!
+    // While the child answers the current question, Gemini AI audio for next question
+    // is downloaded and cached silently in the background (0ms delay when they advance!)
+    const nextQ = nextQuestionRef.current;
+    if (nextQ) {
+      const phrase =
+        nextQ.type === 'phonics'
+          ? `Listen carefully. Which letter makes the sound: ${nextQ.targetLetter.phonics}? ... ${nextQ.targetLetter.phonics}!`
+          : `Which letter starts the word: ${nextQ.targetLetter.exampleWord}?`;
+      geminiTts.prefetch(phrase);
+    }
+
     return () => clearTimeout(timer);
   }, [currentQuestion]);
 
   const generateQuestion = () => {
-    const newQ = createQuizQuestion();
-    setCurrentQuestion(newQ);
+    const nextQ = nextQuestionRef.current;
+    setCurrentQuestion(nextQ);
+    nextQuestionRef.current = createQuizQuestion();
     setSelectedOptionId(null);
     setIsAnswerCorrect(null);
     setIsAnswering(false);

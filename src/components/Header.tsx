@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { GeminiVoiceName } from '../services/geminiTtsService';
+import { GeminiVoiceName, VoiceMode } from '../services/geminiTtsService';
 
 interface HeaderProps {
   stars: number;
@@ -10,6 +10,7 @@ interface HeaderProps {
   onToggleHebrewHints: () => void;
   onOpenGeminiSettings: () => void;
   currentVoice: GeminiVoiceName;
+  voiceMode?: VoiceMode;
 }
 
 const getVoiceEmoji = (voice: GeminiVoiceName): string => {
@@ -33,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleHebrewHints,
   onOpenGeminiSettings,
   currentVoice,
+  voiceMode = 'hybrid',
 }) => {
   return (
     <View style={styles.container}>
@@ -49,14 +51,21 @@ export const Header: React.FC<HeaderProps> = ({
       </View>
 
       <View style={styles.actionsRow}>
-        {/* Gemini Teacher Voice Button */}
+        {/* Teacher Voice & Latency Mode Button */}
         <TouchableOpacity
           style={styles.geminiBtn}
           onPress={onOpenGeminiSettings}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 13 }}>{getVoiceEmoji(currentVoice)}</Text>
-          <Text style={styles.geminiBtnText}>{currentVoice}</Text>
+          <Text style={{ fontSize: 13 }}>
+            {voiceMode === 'native' ? '⚡' : getVoiceEmoji(currentVoice)}
+          </Text>
+          <Text style={styles.geminiBtnText}>
+            {voiceMode === 'native' ? 'Local' : currentVoice}
+          </Text>
+          {voiceMode === 'hybrid' && (
+            <Text style={{ fontSize: 9 }}>🚀</Text>
+          )}
         </TouchableOpacity>
 
         {/* Hebrew hints toggle */}

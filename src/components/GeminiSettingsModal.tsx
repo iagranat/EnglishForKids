@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -10,11 +10,12 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { geminiTts, GeminiVoiceName } from '../services/geminiTtsService';
+import { geminiTts, GeminiVoiceName, VoiceMode } from '../services/geminiTtsService';
+import { ALPHABET_DATA } from '../data/alphabetData';
 
 interface GeminiSettingsModalProps {
   visible: boolean;
-  onClose: (newVoice?: GeminiVoiceName) => void;
+  onClose: (newVoice?: GeminiVoiceName, newMode?: VoiceMode) => void;
 }
 
 interface TeacherVoiceItem {
@@ -67,8 +68,23 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
 }) => {
   const [apiKey, setApiKey] = useState(() => geminiTts.getApiKey());
   const [selectedVoice, setSelectedVoice] = useState<GeminiVoiceName>(() => geminiTts.getVoice());
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => geminiTts.getVoiceMode());
   const [previewingVoice, setPreviewingVoice] = useState<GeminiVoiceName | null>(null);
   const [showKeyEditor, setShowKeyEditor] = useState(false);
+  const [cachedCount, setCachedCount] = useState(0);
+  const [isPrewarming, setIsPrewarming] = useState(() => geminiTts.isPrewarmingActive());
+
+  useEffect(() => {
+    if (visible) {
+      geminiTts.getCachedAudioCount().then((count) => setCachedCount(count));
+    }
+
+    const unsubscribe = geminiTts.subscribe(() => {
+      geminiTts.getCachedAudioCount().then((count) => setCachedCount(count));
+      setIsPrewarming(geminiTts.isPrewarmingActive());
+    });
+    return unsubscribe;
+  }, [visible]);
 
   const handleSelectAndPreview = async (voiceItem: TeacherVoiceItem) => {
     setSelectedVoice(voiceItem.id);
@@ -80,13 +96,18 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
       }
       await geminiTts.speak(voiceItem.samplePhrase, {
         voice: voiceItem.id,
+        instantFallbackIfUncached: false, // For previews, await the actual AI sound
         onDone: () => setPreviewingVoice(null),
       });
     } catch {
       setPreviewingVoice(null);
     } finally {
-      setTimeout(() => setPreviewingVoice(null), 2500);
+      setTimeout(() => setPreviewingVoice(null), 3500);
     }
+  };
+
+  const handlePrewarmAll = () => {
+    geminiTts.prewarmCommonSounds(ALPHABET_DATA);
   };
 
   const handleSave = async () => {
@@ -94,7 +115,8 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
       await geminiTts.setApiKey(apiKey);
     }
     await geminiTts.setVoice(selectedVoice);
-    onClose(selectedVoice);
+    await geminiTts.setVoiceMode(voiceMode);
+    onClose(selectedVoice, voiceMode);
   };
 
   return (
@@ -108,8 +130,8 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
                 <Ionicons name="sparkles" size={18} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.title}>Select Teacher Voice 👩‍🏫</Text>
-                <Text style={styles.subtitle}>בחרו את המורה המלווה ללימוד אנגלית</Text>
+                <Text style={styles.title}>Teacher Voice & Speed 👩‍🏫</Text>
+                <Text style={styles.subtitle}>הגדרות קול המורה ומהירות התגובה</Text>
               </View>
             </View>
             <TouchableOpacity onPress={() => onClose()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -117,14 +139,88 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-            {/* Status indicator */}
-            <View style={styles.statusBanner}>
-              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-              <Text style={styles.statusText}>
-                Gemini 2.0 AI Audio Active & Ready
-              </Text>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            {/* Audio Engine Mode Selector */}
+            <Text style={styles.sectionHeader}>Voice Latency & Engine Mode:</Text>
+            <View style={styles.modeGrid}>
+              {/* 1. Smart Hybrid */}
+              <TouchableOpacity
+                style={[styles.modeCard, voiceMode === 'hybrid' && styles.modeCardSelected]}
+                onPress={() => setVoiceMode('hybrid')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.modeCardHeader}>
+                  <Text style={styles.modeTitle}>🚀 Smart Hybrid</Text>
+                  <View style={[styles.modeBadge, { backgroundColor: '#EDE9FE' }]}>
+                    <Text style={[styles.modeBadgeText, { color: '#7209B7' }]}>Recommended</Text>
+                  </View>
+                </View>
+                <Text style={styles.modeDesc}>
+                  0ms instant response! Plays immediately without waiting, caches studio AI voice in the background for future taps.
+                </Text>
+              </TouchableOpacity>
+
+              {/* 2. Instant Local */}
+              <TouchableOpacity
+                style={[styles.modeCard, voiceMode === 'native' && styles.modeCardSelected]}
+                onPress={() => setVoiceMode('native')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.modeCardHeader}>
+                  <Text style={styles.modeTitle}>⚡ Instant Device Voice</Text>
+                  <View style={[styles.modeBadge, { backgroundColor: '#DCFCE7' }]}>
+                    <Text style={[styles.modeBadgeText, { color: '#166534' }]}>0ms Lag</Text>
+                  </View>
+                </View>
+                <Text style={styles.modeDesc}>
+                  Uses on-device synthesizer. 100% offline, zero waiting time, perfectly responsive on all phones.
+                </Text>
+              </TouchableOpacity>
+
+              {/* 3. Pure Gemini AI */}
+              <TouchableOpacity
+                style={[styles.modeCard, voiceMode === 'gemini' && styles.modeCardSelected]}
+                onPress={() => setVoiceMode('gemini')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.modeCardHeader}>
+                  <Text style={styles.modeTitle}>🌟 Studio Gemini AI Always</Text>
+                  <View style={[styles.modeBadge, { backgroundColor: '#FEF3C7' }]}>
+                    <Text style={[styles.modeBadgeText, { color: '#92400E' }]}>Pure AI</Text>
+                  </View>
+                </View>
+                <Text style={styles.modeDesc}>
+                  Studio AI voice for all audio. Plays instantly if cached; waits ~1-2s for new phrases.
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {/* Cache Status Banner */}
+            {voiceMode !== 'native' && (
+              <View style={styles.cacheBanner}>
+                <View style={styles.cacheInfo}>
+                  <Ionicons name="disc-outline" size={18} color="#059669" />
+                  <Text style={styles.cacheText}>
+                    Cached Studio Audio: <Text style={{ fontWeight: '800' }}>{cachedCount}</Text>
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.prewarmBtn, isPrewarming && styles.prewarmBtnDisabled]}
+                  onPress={handlePrewarmAll}
+                  disabled={isPrewarming}
+                  activeOpacity={0.7}
+                >
+                  {isPrewarming ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-download-outline" size={13} color="#FFFFFF" />
+                      <Text style={styles.prewarmBtnText}>Pre-cache Letters</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Teacher Voice Cards */}
             <Text style={styles.sectionHeader}>Choose Your Preferred Teacher:</Text>
@@ -210,7 +306,7 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
           {/* Save Button */}
           <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
             <Text style={styles.saveBtnText}>
-              Set {selectedVoice} as Active Teacher ✨
+              Save Settings ✨
             </Text>
           </TouchableOpacity>
         </View>
@@ -290,6 +386,84 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#334155',
     marginBottom: 8,
+  },
+  modeGrid: {
+    gap: 8,
+    marginBottom: 14,
+  },
+  modeCard: {
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  modeCardSelected: {
+    borderColor: '#7209B7',
+    backgroundColor: '#FAF5FF',
+  },
+  modeCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  modeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  modeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  modeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  modeDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+  },
+  cacheBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  cacheInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cacheText: {
+    fontSize: 12,
+    color: '#065F46',
+  },
+  prewarmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  prewarmBtnDisabled: {
+    backgroundColor: '#6EE7B7',
+  },
+  prewarmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   voiceGrid: {
     gap: 8,
