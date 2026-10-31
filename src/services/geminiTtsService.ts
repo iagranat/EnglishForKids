@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAudioPlayer, AudioPlayer } from 'expo-audio';
 import { soundService } from './soundService';
+import { DEFAULT_API_KEY, DEFAULT_VOICE } from '../config/geminiConfig';
 
 const STORAGE_KEY_API_KEY = '@english_kids_gemini_api_key';
 const STORAGE_KEY_VOICE = '@english_kids_gemini_voice';
@@ -10,8 +11,8 @@ const STORAGE_KEY_VOICE = '@english_kids_gemini_voice';
 export type GeminiVoiceName = 'Puck' | 'Aoede' | 'Fenrir' | 'Kore';
 
 class GeminiTtsService {
-  private apiKey: string = '';
-  private voice: GeminiVoiceName = 'Aoede'; // Warm, friendly voice by default
+  private apiKey: string = DEFAULT_API_KEY;
+  private voice: GeminiVoiceName = DEFAULT_VOICE; // Default configured voice
   private isGenerating: boolean = false;
   private memoryCache: Map<string, string> = new Map();
   private currentPlayer: AudioPlayer | null = null;
@@ -25,10 +26,11 @@ class GeminiTtsService {
       const savedKey = await AsyncStorage.getItem(STORAGE_KEY_API_KEY);
       const savedVoice = await AsyncStorage.getItem(STORAGE_KEY_VOICE);
       
-      const envKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
-      this.apiKey = savedKey || envKey;
+      this.apiKey = savedKey || DEFAULT_API_KEY;
       if (savedVoice) {
         this.voice = savedVoice as GeminiVoiceName;
+      } else {
+        this.voice = DEFAULT_VOICE;
       }
     } catch {
       // ignore

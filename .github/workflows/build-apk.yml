@@ -18,6 +18,9 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      EXPO_PUBLIC_DEFAULT_VOICE: "Aoede"
 
     steps:
       - name: 🛎️ Checkout Repository
