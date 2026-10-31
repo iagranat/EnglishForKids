@@ -75,6 +75,22 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [isAnswering, setIsAnswering] = useState(false);
 
+  // Guards & references to prevent ghost transitions
+  const questionSeqRef = useRef<number>(0);
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearAllAdvanceTimers = () => {
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
     // 0. Fast-path pre-fetch current question prompt if not cached yet
     const currentPrompt = getPromptText(currentQuestion.targetLetter, currentQuestion.type);
@@ -126,11 +142,20 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       });
     }
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      clearAllAdvanceTimers();
+      geminiTts.stopCurrentPlayback();
+    };
   }, [currentQuestion]);
 
   const generateQuestion = () => {
+    // Cancel all pending advance timers immediately so no ghost advance occurs
+    clearAllAdvanceTimers();
+    // Increment question sequence to invalidate any pending speech callbacks
+    questionSeqRef.current += 1;
     geminiTts.stopCurrentPlayback();
+
     const nextQ = nextQuestionRef.current;
     setCurrentQuestion(nextQ);
     nextQuestionRef.current = createQuizQuestion();
@@ -180,25 +205,43 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       setStreak(nextStreak);
       onAddStars(2);
 
+      clearAllAdvanceTimers();
+      const currentSeq = questionSeqRef.current;
+
       let hasAdvanced = false;
       const advanceToNext = () => {
+        // Discard if user already pressed "Next Question" or navigated away
+        if (questionSeqRef.current !== currentSeq) {
+          clearAllAdvanceTimers();
+          return;
+        }
+
         if (!hasAdvanced) {
           hasAdvanced = true;
           // Give a comfortable 700ms pause AFTER speech finishes completely
-          setTimeout(() => {
-            generateQuestion();
+          advanceTimerRef.current = setTimeout(() => {
+            if (questionSeqRef.current === currentSeq) {
+              generateQuestion();
+            }
           }, 700);
         }
       };
 
       // Safety fallback timer: in case event is delayed, advance after 8s
-      const safetyTimer = setTimeout(() => {
-        advanceToNext();
+      safetyTimerRef.current = setTimeout(() => {
+        if (questionSeqRef.current === currentSeq) {
+          advanceToNext();
+        }
       }, 8000);
 
       const onSpeechDone = () => {
-        clearTimeout(safetyTimer);
-        advanceToNext();
+        if (safetyTimerRef.current) {
+          clearTimeout(safetyTimerRef.current);
+          safetyTimerRef.current = null;
+        }
+        if (questionSeqRef.current === currentSeq) {
+          advanceToNext();
+        }
       };
 
       if (nextStreak === 3) {

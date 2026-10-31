@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 
 class NativeSpeechService {
   private isSpeaking = false;
+  private currentSpeechCancel: (() => void) | null = null;
 
   async triggerHaptic(type: 'light' | 'medium' | 'success' | 'error' = 'light') {
     try {
@@ -24,6 +25,10 @@ class NativeSpeechService {
 
   async stop() {
     try {
+      if (this.currentSpeechCancel) {
+        this.currentSpeechCancel();
+        this.currentSpeechCancel = null;
+      }
       await Speech.stop();
       this.isSpeaking = false;
     } catch {
@@ -35,16 +40,32 @@ class NativeSpeechService {
     try {
       await this.stop();
       this.isSpeaking = true;
+
+      let wasCancelled = false;
+      this.currentSpeechCancel = () => {
+        wasCancelled = true;
+      };
+
       Speech.speak(text, {
         language: 'en-US',
         pitch: options?.pitch ?? 1.05,
         rate: options?.rate ?? 0.85,
         onDone: () => {
           this.isSpeaking = false;
-          options?.onDone?.();
+          if (!wasCancelled) {
+            this.currentSpeechCancel = null;
+            options?.onDone?.();
+          }
+        },
+        onStopped: () => {
+          this.isSpeaking = false;
+          wasCancelled = true;
+          this.currentSpeechCancel = null;
         },
         onError: () => {
           this.isSpeaking = false;
+          wasCancelled = true;
+          this.currentSpeechCancel = null;
         },
       });
     } catch (e) {

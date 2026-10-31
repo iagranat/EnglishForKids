@@ -81,6 +81,7 @@ class GeminiTtsService {
   private voiceMode: VoiceMode = 'hybrid'; // Default to Smart Hybrid (0ms instant local + background AI caching)
   private memoryCache: Map<string, string> = new Map();
   private currentPlayer: AudioPlayer | null = null;
+  private activePlaybackCleanup: (() => void) | null = null;
   private isPrewarming = false;
   private prewarmProgress = { cached: 0, total: 0 };
   private listeners: (() => void)[] = [];
@@ -181,11 +182,16 @@ class GeminiTtsService {
 
   stopCurrentPlayback() {
     try {
+      if (this.activePlaybackCleanup) {
+        this.activePlaybackCleanup();
+        this.activePlaybackCleanup = null;
+      }
       if (this.currentPlayer) {
         this.currentPlayer.pause();
         this.currentPlayer.remove();
         this.currentPlayer = null;
       }
+      nativeSpeech.stop().catch(() => {});
     } catch {
       // ignore
     }
@@ -198,7 +204,25 @@ class GeminiTtsService {
     if (Platform.OS === 'web') {
       try {
         const audio = new Audio(uri);
-        audio.onended = () => onDone?.();
+        let calledDone = false;
+        const cleanup = () => {
+          calledDone = true;
+          try {
+            audio.pause();
+            audio.src = '';
+          } catch {
+            // ignore
+          }
+        };
+        this.activePlaybackCleanup = cleanup;
+
+        audio.onended = () => {
+          if (!calledDone) {
+            calledDone = true;
+            this.activePlaybackCleanup = null;
+            onDone?.();
+          }
+        };
         await audio.play();
       } catch (err) {
         console.warn('Web audio playback error:', err);
@@ -216,18 +240,25 @@ class GeminiTtsService {
       let subscription: { remove: () => void } | null = null;
       let safetyTimeout: ReturnType<typeof setTimeout> | null = null;
 
+      const cleanup = () => {
+        calledDone = true;
+        if (safetyTimeout) {
+          clearTimeout(safetyTimeout);
+          safetyTimeout = null;
+        }
+        try {
+          subscription?.remove();
+        } catch {
+          // ignore
+        }
+      };
+
+      this.activePlaybackCleanup = cleanup;
+
       const triggerDone = () => {
         if (!calledDone) {
-          calledDone = true;
-          if (safetyTimeout) {
-            clearTimeout(safetyTimeout);
-            safetyTimeout = null;
-          }
-          try {
-            subscription?.remove();
-          } catch {
-            // ignore
-          }
+          cleanup();
+          this.activePlaybackCleanup = null;
           onDone?.();
         }
       };
