@@ -47,6 +47,21 @@ const playPromptAudio = async (target: LetterItem, type: 'phonics' | 'word') => 
   }
 };
 
+const getCorrectResponseText = (target: LetterItem): string => {
+  return `Correct! The letter ${target.upper} makes the sound ${target.phonics}, like in ${target.exampleWord}!`;
+};
+
+const getIncorrectResponseText = (
+  chosen: LetterItem,
+  target: LetterItem,
+  type: 'phonics' | 'word'
+): string => {
+  if (type === 'word') {
+    return `That was ${chosen.upper}. Try again to find the letter that starts the word ${target.exampleWord}!`;
+  }
+  return `That was ${chosen.upper}. Try again to find the letter that sounds like ${target.phonics}!`;
+};
+
 export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
   showHebrewHints,
   onAddStars,
@@ -65,9 +80,26 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       playPromptAudio(currentQuestion.targetLetter, currentQuestion.type);
     }, 400);
 
-    // 2. Pre-cache current question's option letters (High Priority)
-    const currentOptionSounds = currentQuestion.options.map((o) => o.upper);
-    geminiTts.prefetchMany(currentOptionSounds, { priority: 'high' });
+    // 2. Pre-cache ALL possible response sounds for this current question:
+    // a) The correct response phrase (High Priority)
+    const correctPhrase = getCorrectResponseText(currentQuestion.targetLetter);
+    geminiTts.prefetch(correctPhrase, undefined, 'high');
+
+    // b) The incorrect response phrases for all 3 distractors (High Priority)
+    currentQuestion.options.forEach((opt) => {
+      if (opt.id !== currentQuestion.targetLetter.id) {
+        const incorrectPhrase = getIncorrectResponseText(
+          opt,
+          currentQuestion.targetLetter,
+          currentQuestion.type
+        );
+        geminiTts.prefetch(incorrectPhrase, undefined, 'high');
+      }
+    });
+
+    // c) Common streak praises
+    geminiTts.prefetch('Three in a row! Your ears are incredible!', undefined, 'normal');
+    geminiTts.prefetch('Five in a row! You are an absolute phonics superstar!', undefined, 'normal');
 
     // 3. Predictive background prefetch for the NEXT question!
     // While the child answers the current question, Gemini AI audio for next question
@@ -79,7 +111,7 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
           ? `Listen carefully. Which letter makes the sound: ${nextQ.targetLetter.phonics}? ... ${nextQ.targetLetter.phonics}!`
           : `Which letter starts the word: ${nextQ.targetLetter.exampleWord}?`;
       geminiTts.prefetch(nextPrompt, undefined, 'normal');
-      nextQ.options.forEach((o) => geminiTts.prefetch(o.upper, undefined, 'normal'));
+      geminiTts.prefetch(getCorrectResponseText(nextQ.targetLetter), undefined, 'normal');
     }
 
     return () => clearTimeout(timer);
@@ -141,20 +173,19 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       } else if (nextStreak === 5) {
         await geminiTts.speakEncouragement('streak_5', onSpeechDone);
       } else {
-        await geminiTts.speak(
-          `Correct! The letter ${option.upper} makes the sound ${currentQuestion.targetLetter.phonics}, like in ${currentQuestion.targetLetter.exampleWord}!`,
-          {
-            onDone: onSpeechDone,
-          }
-        );
+        await geminiTts.speak(getCorrectResponseText(currentQuestion.targetLetter), {
+          onDone: onSpeechDone,
+        });
       }
     } else {
       await soundService.playErrorSound();
       setStreak(0);
-      await soundService.speak(
-        `That was ${option.upper}. Try again to find the letter that sounds like ${currentQuestion.targetLetter.phonics}!`,
-        { rate: 0.85, pitch: 1.05 }
+      const incorrectPhrase = getIncorrectResponseText(
+        option,
+        currentQuestion.targetLetter,
+        currentQuestion.type
       );
+      await soundService.speak(incorrectPhrase, { rate: 0.85, pitch: 1.05 });
       setIsAnswering(false);
     }
   };
