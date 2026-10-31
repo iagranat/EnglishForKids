@@ -226,15 +226,131 @@ const LOWERCASE_SKELETONS: Record<string, LetterPath[]> = {
   ],
 };
 
+interface NegativeZone {
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+}
+
+const NEGATIVE_SPACES: Record<string, NegativeZone[]> = {
+  // Uppercase
+  A: [
+    { xMin: -0.22, xMax: 0.22, yMin: -0.55, yMax: 0.05 }, // upper triangle hole
+    { xMin: -0.28, xMax: 0.28, yMin: 0.45, yMax: 0.95 },  // open space below crossbar
+  ],
+  B: [
+    { xMin: -0.25, xMax: 0.2, yMin: -0.7, yMax: -0.25 },  // top loop hole
+    { xMin: -0.25, xMax: 0.25, yMin: 0.25, yMax: 0.7 },   // bottom loop hole
+    { xMin: 0.35, xMax: 0.8, yMin: -0.15, yMax: 0.15 },   // waist notch
+  ],
+  C: [
+    { xMin: 0.15, xMax: 0.75, yMin: -0.35, yMax: 0.35 },  // open right mouth
+  ],
+  D: [
+    { xMin: -0.2, xMax: 0.3, yMin: -0.55, yMax: 0.55 },   // inner counter
+  ],
+  O: [
+    { xMin: -0.35, xMax: 0.35, yMin: -0.55, yMax: 0.55 }, // center hole
+  ],
+  P: [
+    { xMin: -0.2, xMax: 0.25, yMin: -0.7, yMax: -0.25 },  // upper loop hole
+    { xMin: 0.0, xMax: 0.7, yMin: 0.2, yMax: 0.95 },      // bottom-right open area
+  ],
+  Q: [
+    { xMin: -0.35, xMax: 0.35, yMin: -0.55, yMax: 0.55 }, // center hole
+  ],
+  R: [
+    { xMin: -0.2, xMax: 0.25, yMin: -0.7, yMax: -0.25 },  // upper loop hole
+  ],
+  // Lowercase
+  a: [
+    { xMin: -0.2, xMax: 0.15, yMin: 0.0, yMax: 0.55 },    // lower loop hole
+  ],
+  b: [
+    { xMin: -0.15, xMax: 0.25, yMin: 0.15, yMax: 0.65 },  // loop hole
+  ],
+  d: [
+    { xMin: -0.25, xMax: 0.15, yMin: 0.15, yMax: 0.65 },  // loop hole
+  ],
+  e: [
+    { xMin: -0.2, xMax: 0.2, yMin: -0.15, yMax: 0.18 },   // eye hole
+  ],
+  o: [
+    { xMin: -0.25, xMax: 0.25, yMin: 0.0, yMax: 0.65 },   // center hole
+  ],
+  p: [
+    { xMin: -0.15, xMax: 0.25, yMin: 0.1, yMax: 0.65 },   // loop hole
+  ],
+  q: [
+    { xMin: -0.25, xMax: 0.15, yMin: 0.1, yMax: 0.65 },   // loop hole
+  ],
+};
+
 /**
- * Samples points along the normalized skeleton of a letter, mapped to canvas coordinates.
+ * Detects whether the user simply drew a 4-sided bounding box / rectangle around the letter.
  */
-export function getLetterTargetPoints(
+function isBoxPerimeterCheat(userPoints: Point[]): boolean {
+  if (userPoints.length < 24) return false;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of userPoints) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const width = maxX - minX;
+  const height = maxY - minY;
+  if (width < 50 || height < 75) return false;
+
+  function isContinuousEdge(
+    pts: Point[],
+    getCoord: (p: Point) => number,
+    getPerp: (p: Point) => number,
+    minCoord: number,
+    maxCoord: number,
+    targetPerp: number,
+    perpMargin = 14
+  ): boolean {
+    const edgePts = pts.filter((p) => Math.abs(getPerp(p) - targetPerp) <= perpMargin);
+    if (edgePts.length < 6) return false;
+    const span = maxCoord - minCoord;
+    const bins = [0, 0, 0, 0];
+    for (const p of edgePts) {
+      const frac = (getCoord(p) - minCoord) / span;
+      const binIdx = Math.min(3, Math.max(0, Math.floor(frac * 4)));
+      bins[binIdx]++;
+    }
+    return bins.every((c) => c >= 1);
+  }
+
+  const topCont = isContinuousEdge(userPoints, (p) => p.x, (p) => p.y, minX, maxX, minY, 14);
+  const botCont = isContinuousEdge(userPoints, (p) => p.x, (p) => p.y, minX, maxX, maxY, 14);
+  const leftCont = isContinuousEdge(userPoints, (p) => p.y, (p) => p.x, minY, maxY, minX, 14);
+  const rightCont = isContinuousEdge(userPoints, (p) => p.y, (p) => p.x, minY, maxY, maxX, 14);
+
+  // 4 corners presence check (within 14px)
+  const cornerTol = 14;
+  const hasTL = userPoints.some((p) => Math.hypot(p.x - minX, p.y - minY) <= cornerTol);
+  const hasTR = userPoints.some((p) => Math.hypot(p.x - maxX, p.y - minY) <= cornerTol);
+  const hasBR = userPoints.some((p) => Math.hypot(p.x - maxX, p.y - maxY) <= cornerTol);
+  const hasBL = userPoints.some((p) => Math.hypot(p.x - minX, p.y - maxY) <= cornerTol);
+
+  const all4Corners = hasTL && hasTR && hasBR && hasBL;
+  const all4Edges = topCont && botCont && leftCont && rightCont;
+
+  return all4Corners && all4Edges;
+}
+
+/**
+ * Returns distinct stroke segments of a letter, mapped to canvas coordinates.
+ */
+export function getLetterStrokeSegments(
   char: string,
   isUpper: boolean,
   canvasWidth: number,
   canvasHeight: number
-): Point[] {
+): Point[][] {
   const dictionary = isUpper ? UPPERCASE_SKELETONS : LOWERCASE_SKELETONS;
   const key = isUpper ? char.toUpperCase() : char.toLowerCase();
   const strokes = dictionary[key] || UPPERCASE_SKELETONS[char.toUpperCase()];
@@ -248,15 +364,17 @@ export function getLetterTargetPoints(
   const scaleX = isUpper ? 65 : 55;
   const scaleY = isUpper ? 85 : 70;
 
-  const points: Point[] = [];
+  const segments: Point[][] = [];
 
   for (const stroke of strokes) {
+    const strokePoints: Point[] = [];
     if (stroke.length === 1) {
       // Single dot (like dot over i or j)
-      points.push({
+      strokePoints.push({
         x: cx + stroke[0][0] * scaleX,
         y: cy + stroke[0][1] * scaleY,
       });
+      segments.push(strokePoints);
       continue;
     }
 
@@ -270,11 +388,11 @@ export function getLetterTargetPoints(
       const py2 = cy + y2 * scaleY;
 
       const dist = Math.hypot(px2 - px1, py2 - py1);
-      const steps = Math.max(1, Math.round(dist / 14));
+      const steps = Math.max(1, Math.round(dist / 12));
 
       for (let s = 0; s < steps; s++) {
         const t = s / steps;
-        points.push({
+        strokePoints.push({
           x: px1 + (px2 - px1) * t,
           y: py1 + (py2 - py1) * t,
         });
@@ -282,13 +400,28 @@ export function getLetterTargetPoints(
     }
 
     const last = stroke[stroke.length - 1];
-    points.push({
+    strokePoints.push({
       x: cx + last[0] * scaleX,
       y: cy + last[1] * scaleY,
     });
+
+    segments.push(strokePoints);
   }
 
-  return points;
+  return segments;
+}
+
+/**
+ * Samples points along the normalized skeleton of a letter, mapped to canvas coordinates.
+ */
+export function getLetterTargetPoints(
+  char: string,
+  isUpper: boolean,
+  canvasWidth: number,
+  canvasHeight: number
+): Point[] {
+  const segments = getLetterStrokeSegments(char, isUpper, canvasWidth, canvasHeight);
+  return segments.flat();
 }
 
 /**
@@ -335,10 +468,65 @@ export function evaluateLetterTracing(
     };
   }
 
-  const targetPoints = getLetterTargetPoints(char, isUpper, canvasWidth, canvasHeight);
+  // 3. Box Perimeter Cheat Check
+  if (isBoxPerimeterCheat(userPoints)) {
+    return {
+      status: 'incomplete',
+      starsAwarded: 0,
+      scorePercent: 20,
+      isLeftToRight: false,
+      coveragePercent: 20,
+      accuracyPercent: 15,
+      titleEn: 'That looks like a box! 📦',
+      titleHe: 'ציירתם מסגרת! 📦',
+      messageEn: `Trace along the real lines and curves of the letter ${charDisplay}, not a box around it!`,
+      messageHe: `ציירתם מסגרת מרובעת! עקבו אחרי קווי האות ${charDisplay} עצמה עם האצבע.`,
+    };
+  }
+
+  const cx = canvasWidth / 2;
+  const cy = canvasHeight / 2 - 5;
+  const scaleX = isUpper ? 65 : 55;
+  const scaleY = isUpper ? 85 : 70;
+
+  // 4. Negative Space / Hole check (detects solid filled scribbles)
+  const lookupKey = isUpper ? char.toUpperCase() : char.toLowerCase();
+  const holes = NEGATIVE_SPACES[lookupKey] || NEGATIVE_SPACES[char.toUpperCase()] || [];
+  if (holes.length > 0) {
+    let holeHits = 0;
+    for (const p of userPoints) {
+      const nx = (p.x - cx) / scaleX;
+      const ny = (p.y - cy) / scaleY;
+      for (const h of holes) {
+        if (nx >= h.xMin && nx <= h.xMax && ny >= h.yMin && ny <= h.yMax) {
+          holeHits++;
+          break;
+        }
+      }
+    }
+    const holeRatio = holeHits / userPoints.length;
+    if (holeRatio > 0.16) {
+      return {
+        status: 'incomplete',
+        starsAwarded: 0,
+        scorePercent: Math.max(10, Math.round((1 - holeRatio) * 35)),
+        isLeftToRight: false,
+        coveragePercent: 30,
+        accuracyPercent: 20,
+        titleEn: "Don't fill the box! ✏️",
+        titleHe: 'אל תצבעו את הכל! ✏️',
+        messageEn: `Follow only the outline of the letter ${charDisplay} with your finger without coloring the whole area.`,
+        messageHe: `עקבו עם האצבע רק על קווי האות ${charDisplay}, אל תמלאו את כל השטח בצבע.`,
+      };
+    }
+  }
+
+  // 5. Segment-Level Target Evaluation
+  const strokeSegments = getLetterStrokeSegments(char, isUpper, canvasWidth, canvasHeight);
+  const allTargetPoints = strokeSegments.flat();
 
   // Fallback if letter has no skeleton definition
-  if (targetPoints.length === 0) {
+  if (allTargetPoints.length === 0) {
     return {
       status: 'good',
       starsAwarded: 2,
@@ -353,38 +541,36 @@ export function evaluateLetterTracing(
     };
   }
 
-  // Generous tolerance radius (34px) suitable for children tracing with finger
-  const TOLERANCE_RADIUS = 34;
+  // Strict & forgiving finger tolerance radius (20px)
+  const TOLERANCE_RADIUS = 20;
 
-  // A. Calculate Target Coverage (how many target skeleton points were visited)
-  let coveredTargets = 0;
-  for (const target of targetPoints) {
-    let covered = false;
-    for (const userPt of userPoints) {
-      if (Math.hypot(userPt.x - target.x, userPt.y - target.y) <= TOLERANCE_RADIUS) {
-        covered = true;
-        break;
+  // Evaluate each stroke segment individually
+  const segmentCoverages = strokeSegments.map((segPts) => {
+    let covered = 0;
+    for (const tp of segPts) {
+      if (userPoints.some((up) => Math.hypot(up.x - tp.x, up.y - tp.y) <= TOLERANCE_RADIUS)) {
+        covered++;
       }
     }
-    if (covered) coveredTargets++;
-  }
-  const coverageRatio = coveredTargets / targetPoints.length;
+    return covered / segPts.length;
+  });
 
-  // B. Calculate Stroke Accuracy (how many user points were on/near the letter skeleton)
+  const minSegmentCoverage = Math.min(...segmentCoverages);
+  const totalCoveredTargets = strokeSegments.reduce((sum, segPts, idx) => {
+    return sum + segmentCoverages[idx] * segPts.length;
+  }, 0);
+  const overallCoverage = totalCoveredTargets / allTargetPoints.length;
+
+  // User stroke accuracy
   let onTargetUserPoints = 0;
-  for (const userPt of userPoints) {
-    let onTarget = false;
-    for (const target of targetPoints) {
-      if (Math.hypot(userPt.x - target.x, userPt.y - target.y) <= TOLERANCE_RADIUS) {
-        onTarget = true;
-        break;
-      }
+  for (const up of userPoints) {
+    if (allTargetPoints.some((tp) => Math.hypot(up.x - tp.x, up.y - tp.y) <= TOLERANCE_RADIUS)) {
+      onTargetUserPoints++;
     }
-    if (onTarget) onTargetUserPoints++;
   }
   const accuracyRatio = onTargetUserPoints / userPoints.length;
 
-  // C. Direction Check (Did the child generally write left-to-right?)
+  // Direction Check (Did the child generally write left-to-right?)
   const quarter = Math.max(2, Math.floor(userPoints.length / 4));
   const startPoints = userPoints.slice(0, quarter);
   const endPoints = userPoints.slice(userPoints.length - quarter);
@@ -392,29 +578,25 @@ export function evaluateLetterTracing(
   const avgEndX = endPoints.reduce((sum, p) => sum + p.x, 0) / endPoints.length;
   const isLeftToRight = avgEndX - avgStartX > 5;
 
-  const coveragePercent = Math.round(coverageRatio * 100);
+  const coveragePercent = Math.round(overallCoverage * 100);
   const accuracyPercent = Math.round(accuracyRatio * 100);
 
-  // D. Determine grading thresholds
+  // Require every essential stroke to have at least 45% coverage
+  const allStrokesPresent = minSegmentCoverage >= 0.45;
+
   let status: 'incomplete' | 'good' | 'excellent' = 'incomplete';
   let starsAwarded = 0;
   let scorePercent = 0;
 
-  if (coverageRatio < 0.40) {
-    // Fails shape recognition: drawn shape does NOT cover the letter (e.g. drawn a box, circle, or random scribble)
-    scorePercent = Math.min(35, Math.round(coverageRatio * 60));
-    status = 'incomplete';
-    starsAwarded = 0;
-  } else if (coverageRatio < 0.62 || accuracyRatio < 0.45) {
-    // Partial tracing or too much outside drawing
-    scorePercent = Math.min(65, Math.round(30 + coverageRatio * 35 + accuracyRatio * 15));
+  if (!allStrokesPresent || overallCoverage < 0.55 || accuracyRatio < 0.45) {
+    scorePercent = Math.min(65, Math.round(20 + overallCoverage * 30 + accuracyRatio * 20));
     status = 'incomplete';
     starsAwarded = 0;
   } else {
     // Real, recognizable letter tracing
-    scorePercent = Math.min(100, Math.round(40 + coverageRatio * 40 + accuracyRatio * 20));
+    scorePercent = Math.min(100, Math.round(35 + overallCoverage * 45 + accuracyRatio * 20));
 
-    if (scorePercent >= 82 && coverageRatio >= 0.72 && accuracyRatio >= 0.60) {
+    if (scorePercent >= 82 && overallCoverage >= 0.72 && minSegmentCoverage >= 0.60 && accuracyRatio >= 0.55) {
       status = 'excellent';
       starsAwarded = 3;
     } else {
@@ -428,6 +610,8 @@ export function evaluateLetterTracing(
       ? 'Sensational Handwriting! 🌟🌟🌟'
       : status === 'good'
       ? 'Good Effort! 🌟🌟'
+      : minSegmentCoverage < 0.45
+      ? 'Almost there! ✏️'
       : 'Keep Practicing! ✏️';
 
   const titleHe =
@@ -435,6 +619,8 @@ export function evaluateLetterTracing(
       ? 'כתיבה מעולה ומדויקת! 🌟🌟🌟'
       : status === 'good'
       ? 'עבודה יפה! 🌟🌟'
+      : minSegmentCoverage < 0.45
+      ? 'כמעט הצלחתם! ✏️'
       : 'המשיכו לתרגל! ✏️';
 
   const messageEn =
@@ -442,6 +628,8 @@ export function evaluateLetterTracing(
       ? `You traced the letter ${charDisplay} beautifully! You earned 3 stars!`
       : status === 'good'
       ? `Nice tracing practice for the letter ${charDisplay}! You earned 2 stars!`
+      : minSegmentCoverage < 0.45
+      ? `You missed some strokes of the letter ${charDisplay}! Make sure to trace every line.`
       : `Trace more closely along the lines of the letter ${charDisplay} to complete it!`;
 
   const messageHe =
@@ -449,6 +637,8 @@ export function evaluateLetterTracing(
       ? `עקבתם אחרי האות ${charDisplay} בצורה מושלמת וזכיתם ב-3 כוכבים!`
       : status === 'good'
       ? `תרגול יפה של האות ${charDisplay}! זכיתם ב-2 כוכבים!`
+      : minSegmentCoverage < 0.45
+      ? `פספסתם חלק מקווי האות ${charDisplay}! הקפידו לעקוב אחרי כל הקווים שלה.`
       : `עקבו מקרוב יותר אחרי קווי האות ${charDisplay} כדי להשלים את התרגול!`;
 
   return {

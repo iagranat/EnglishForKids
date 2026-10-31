@@ -52,6 +52,10 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
   }, [activeColor]);
 
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const canvasWidthRef = useRef(canvasSize.width);
+  useEffect(() => {
+    canvasWidthRef.current = canvasSize.width;
+  }, [canvasSize.width]);
 
   // Pre-cache sounds for active letter + upcoming letter in the alphabet
   useEffect(() => {
@@ -86,8 +90,17 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
           lastPointRef.current = null;
           const { locationX, locationY } = evt.nativeEvent;
 
-          // Ignore touches in the rounded corner boundary zone (< 16px)
-          if (locationX >= 16 || locationY >= 16) {
+          // Reject touches in rounded corner deadzones (< 24px)
+          const inTopLeft = locationX < 24 && locationY < 24;
+          const inTopRight =
+            canvasWidthRef.current > 0 &&
+            locationX > canvasWidthRef.current - 24 &&
+            locationY < 24;
+          if (inTopLeft || inTopRight) {
+            return;
+          }
+
+          if (locationX >= 0 && locationY >= 0) {
             lastPointRef.current = { x: locationX, y: locationY };
             setPoints((prev) => [
               ...prev,
@@ -98,18 +111,23 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
         onPanResponderMove: (evt: GestureResponderEvent) => {
           const { locationX, locationY } = evt.nativeEvent;
 
-          // 1. Ignore spurious noise in extreme corner
-          if (locationX < 16 && locationY < 16) {
+          // Reject touches in rounded corner deadzones (< 24px)
+          const inTopLeft = locationX < 24 && locationY < 24;
+          const inTopRight =
+            canvasWidthRef.current > 0 &&
+            locationX > canvasWidthRef.current - 24 &&
+            locationY < 24;
+          if (inTopLeft || inTopRight) {
             return;
           }
 
-          // 2. Reject sudden teleportation jump to the corner during continuous drag
+          // Reject sudden teleportation jump across canvas (> 60px) in a single move frame
           if (lastPointRef.current) {
             const dist = Math.hypot(
               locationX - lastPointRef.current.x,
               locationY - lastPointRef.current.y
             );
-            if (dist > 75 && (locationX < 35 || locationY < 35)) {
+            if (dist > 60) {
               return;
             }
           }
@@ -279,33 +297,19 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
             setCanvasSize({ width, height });
           }
         }}
-        {...panResponder.panHandlers}
       >
-        <View
-          style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
-          pointerEvents="none"
-        >
-          {/* Stroke counter badge */}
-          <View style={styles.strokeBadge}>
-            <Ionicons name="pencil" size={11} color="#64748B" />
-            <Text style={styles.strokeBadgeText}>
-              {points.length === 0
-                ? (showHebrewHints ? 'התחילו לכתוב' : 'Trace here')
-                : `${points.length} ${showHebrewHints ? 'נקודות' : 'strokes'}`}
-            </Text>
-          </View>
+        {/* Layer 1: Background Guide Letter Outline */}
+        <View style={styles.guideLetterContainer} pointerEvents="none">
+          <Text style={styles.guideLetter}>{displayChar}</Text>
+          <Text style={styles.ltrHint}>
+            {showHebrewHints
+              ? '➡️ כותבים משמאל לימין'
+              : '➡️ Write from Left to Right'}
+          </Text>
+        </View>
 
-          {/* Background Guide Letter Outline */}
-          <View style={styles.guideLetterContainer}>
-            <Text style={styles.guideLetter}>{displayChar}</Text>
-            <Text style={styles.ltrHint}>
-              {showHebrewHints
-                ? '➡️ כותבים משמאל לימין'
-                : '➡️ Write from Left to Right'}
-            </Text>
-          </View>
-
-          {/* User Drawn Dots / Strokes */}
+        {/* Layer 2: User Drawn Dots / Strokes */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
           {points.map((pt, idx) => (
             <View
               key={idx}
@@ -320,6 +324,23 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
             />
           ))}
         </View>
+
+        {/* Layer 3: Stroke counter badge */}
+        <View style={styles.strokeBadge} pointerEvents="none">
+          <Ionicons name="pencil" size={11} color="#64748B" />
+          <Text style={styles.strokeBadgeText}>
+            {points.length === 0
+              ? (showHebrewHints ? 'התחילו לכתוב' : 'Trace here')
+              : `${points.length} ${showHebrewHints ? 'נקודות' : 'strokes'}`}
+          </Text>
+        </View>
+
+        {/* Layer 4: Transparent Touch Capture Overlay (No children, clean 1:1 coordinates) */}
+        <View
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+          collapsable={false}
+          {...panResponder.panHandlers}
+        />
       </View>
 
       {/* Color Palette */}
