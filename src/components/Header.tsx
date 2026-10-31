@@ -6,12 +6,16 @@ interface HeaderProps {
   stars: number;
   showHebrewHints: boolean;
   onToggleHebrewHints: () => void;
+  onOpenGeminiSettings: () => void;
+  hasGeminiKey: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   stars,
   showHebrewHints,
   onToggleHebrewHints,
+  onOpenGeminiSettings,
+  hasGeminiKey,
 }) => {
   return (
     <View style={styles.container}>
@@ -28,6 +32,27 @@ export const Header: React.FC<HeaderProps> = ({
       </View>
 
       <View style={styles.actionsRow}>
+        {/* Gemini AI Voice toggle / settings */}
+        <TouchableOpacity
+          style={[styles.geminiBtn, hasGeminiKey && styles.geminiBtnActive]}
+          onPress={onOpenGeminiSettings}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="sparkles"
+            size={13}
+            color={hasGeminiKey ? '#FFFFFF' : '#7209B7'}
+          />
+          <Text
+            style={[
+              styles.geminiBtnText,
+              hasGeminiKey && styles.geminiBtnTextActive,
+            ]}
+          >
+            AI Voice
+          </Text>
+        </TouchableOpacity>
+
         {/* Hebrew hints toggle */}
         <TouchableOpacity
           style={[styles.hintButton, showHebrewHints && styles.hintButtonActive]}
@@ -45,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
               showHebrewHints && styles.hintButtonTextActive,
             ]}
           >
-            {showHebrewHints ? 'עברית: פועל' : 'עברית'}
+            {showHebrewHints ? 'עברית' : 'Eng'}
           </Text>
         </TouchableOpacity>
 
@@ -100,7 +125,30 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+  },
+  geminiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+  },
+  geminiBtnActive: {
+    backgroundColor: '#7209B7',
+    borderColor: '#7209B7',
+  },
+  geminiBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7209B7',
+  },
+  geminiBtnTextActive: {
+    color: '#FFFFFF',
   },
   hintButton: {
     flexDirection: 'row',

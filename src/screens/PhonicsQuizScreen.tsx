@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ALPHABET_DATA, LetterItem } from '../data/alphabetData';
 import { soundService } from '../services/soundService';
+import { geminiTts } from '../services/geminiTtsService';
 
 interface PhonicsQuizScreenProps {
   showHebrewHints: boolean;
@@ -87,13 +88,20 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
 
     if (isCorrect) {
       await soundService.playSuccessSound();
+      const nextStreak = streak + 1;
       setScore((prev) => prev + 10);
-      setStreak((prev) => prev + 1);
+      setStreak(nextStreak);
       onAddStars(2);
-      await soundService.speak(
-        `Correct! The letter ${option.upper} makes the sound ${currentQuestion.targetLetter.phonics}, like in ${currentQuestion.targetLetter.exampleWord}!`,
-        { rate: 0.85, pitch: 1.05 }
-      );
+
+      if (nextStreak === 3) {
+        await geminiTts.speakEncouragement('streak_3');
+      } else if (nextStreak === 5) {
+        await geminiTts.speakEncouragement('streak_5');
+      } else {
+        await geminiTts.speak(
+          `Correct! The letter ${option.upper} makes the sound ${currentQuestion.targetLetter.phonics}, like in ${currentQuestion.targetLetter.exampleWord}!`
+        );
+      }
 
       // Auto advance to next question
       setTimeout(() => {

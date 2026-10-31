@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CVC_WORDS, SimpleWordItem, ALPHABET_DATA } from '../data/alphabetData';
 import { soundService } from '../services/soundService';
+import { geminiTts } from '../services/geminiTtsService';
 
 interface WordBlendScreenProps {
   showHebrewHints: boolean;
@@ -46,7 +47,13 @@ export const WordBlendScreen: React.FC<WordBlendScreenProps> = ({
 
     await soundService.speak(
       `${phonicsSpaced} ... ${currentWord.word}! ${currentWord.word} means ${currentWord.hebrew}.`,
-      { rate: 0.8, pitch: 1.05 }
+      {
+        rate: 0.8,
+        pitch: 1.05,
+        onDone: () => {
+          geminiTts.speakEncouragement('blend_success');
+        },
+      }
     );
     onAddStars(2);
   };

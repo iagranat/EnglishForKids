@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ALPHABET_DATA, LetterItem } from '../data/alphabetData';
 import { soundService } from '../services/soundService';
+import { geminiTts } from '../services/geminiTtsService';
 
 interface CaseMatchScreenProps {
   showHebrewHints: boolean;
@@ -70,14 +71,15 @@ export const CaseMatchScreen: React.FC<CaseMatchScreenProps> = ({
       setSelectedUpper(null);
       setWrongPair(null);
       await soundService.playSuccessSound();
-      await soundService.speak(`${letter.upper} and ${letter.lower}! Great match!`);
       onAddStars(2);
 
       // Check if round finished
       if (newMatched.length === currentPool.length) {
         setRoundCompleted(true);
         onAddStars(5);
-        await soundService.speak('Awesome! Round completed! You found all matches!');
+        await geminiTts.speakEncouragement('round_complete');
+      } else {
+        await geminiTts.speakEncouragement('match_win');
       }
     } else {
       // Mismatch

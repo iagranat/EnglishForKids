@@ -8,18 +8,22 @@ import {
 
 import { Header } from './src/components/Header';
 import { TabNavigation, AppTab } from './src/components/TabNavigation';
+import { GeminiSettingsModal } from './src/components/GeminiSettingsModal';
 import { LettersScreen } from './src/screens/LettersScreen';
 import { CaseMatchScreen } from './src/screens/CaseMatchScreen';
 import { PhonicsQuizScreen } from './src/screens/PhonicsQuizScreen';
 import { TracingScreen } from './src/screens/TracingScreen';
 import { WordBlendScreen } from './src/screens/WordBlendScreen';
 import { LetterItem, ALPHABET_DATA } from './src/data/alphabetData';
+import { geminiTts } from './src/services/geminiTtsService';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<AppTab>('letters');
   const [stars, setStars] = useState(10); // Start with 10 welcome stars!
   const [showHebrewHints, setShowHebrewHints] = useState(true);
   const [tracingLetter, setTracingLetter] = useState<LetterItem>(ALPHABET_DATA[0]);
+  const [showGeminiModal, setShowGeminiModal] = useState(false);
+  const [hasGeminiKey, setHasGeminiKey] = useState(geminiTts.hasApiKey());
 
   const handleAddStars = (amount: number) => {
     setStars((prev) => prev + amount);
@@ -81,9 +85,19 @@ export default function App() {
           stars={stars}
           showHebrewHints={showHebrewHints}
           onToggleHebrewHints={() => setShowHebrewHints((prev) => !prev)}
+          onOpenGeminiSettings={() => setShowGeminiModal(true)}
+          hasGeminiKey={hasGeminiKey}
         />
         <View style={styles.contentContainer}>{renderScreen()}</View>
         <TabNavigation currentTab={currentTab} onSelectTab={setCurrentTab} />
+
+        <GeminiSettingsModal
+          visible={showGeminiModal}
+          onClose={() => {
+            setShowGeminiModal(false);
+            setHasGeminiKey(geminiTts.hasApiKey());
+          }}
+        />
       </SafeAreaView>
     </SafeAreaProvider>
   );
