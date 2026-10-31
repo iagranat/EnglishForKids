@@ -541,8 +541,8 @@ export function evaluateLetterTracing(
     };
   }
 
-  // Strict & forgiving finger tolerance radius (20px)
-  const TOLERANCE_RADIUS = 20;
+  // Forgiving finger tolerance radius (24px) suitable for children
+  const TOLERANCE_RADIUS = 24;
 
   // Evaluate each stroke segment individually
   const segmentCoverages = strokeSegments.map((segPts) => {
@@ -581,22 +581,24 @@ export function evaluateLetterTracing(
   const coveragePercent = Math.round(overallCoverage * 100);
   const accuracyPercent = Math.round(accuracyRatio * 100);
 
-  // Require every essential stroke to have at least 45% coverage
-  const allStrokesPresent = minSegmentCoverage >= 0.45;
+  // Require every essential stroke to have at least 40% coverage
+  const allStrokesPresent = minSegmentCoverage >= 0.40;
 
   let status: 'incomplete' | 'good' | 'excellent' = 'incomplete';
   let starsAwarded = 0;
   let scorePercent = 0;
 
-  if (!allStrokesPresent || overallCoverage < 0.55 || accuracyRatio < 0.45) {
-    scorePercent = Math.min(65, Math.round(20 + overallCoverage * 30 + accuracyRatio * 20));
+  if (!allStrokesPresent || overallCoverage < 0.48 || accuracyRatio < 0.40) {
+    const rawScore = 15 + overallCoverage * 35 + accuracyRatio * 20;
+    scorePercent = Math.min(55, Math.round(rawScore));
     status = 'incomplete';
     starsAwarded = 0;
   } else {
-    // Real, recognizable letter tracing
-    scorePercent = Math.min(100, Math.round(35 + overallCoverage * 45 + accuracyRatio * 20));
+    // Forgiving scaling: what was 80% is now 100%
+    const rawScore = 30 + overallCoverage * 50 + accuracyRatio * 20;
+    scorePercent = Math.min(100, Math.round((rawScore / 80) * 100));
 
-    if (scorePercent >= 82 && overallCoverage >= 0.72 && minSegmentCoverage >= 0.60 && accuracyRatio >= 0.55) {
+    if (scorePercent >= 85 && overallCoverage >= 0.60 && minSegmentCoverage >= 0.45 && accuracyRatio >= 0.45) {
       status = 'excellent';
       starsAwarded = 3;
     } else {
