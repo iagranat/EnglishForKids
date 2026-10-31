@@ -8,11 +8,15 @@ import { GeminiVoiceName } from '../services/geminiTtsService';
  * 2. As a GitHub Repository Secret named `GEMINI_API_KEY` (automatically baked into the APK builds)
  * 3. Directly in the `DEFAULT_API_KEY` variable below
  */
-export const DEFAULT_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+export const DEFAULT_API_KEY = (
+  process.env.EXPO_PUBLIC_GEMINI_API_KEY || ''
+)
+  .trim()
+  .replace(/\.+$/, '');
 
 /**
  * Default Teacher Voice:
- * - 'Aoede': Warm & friendly female teacher (Great for young learners)
+ * - 'Aoede': Warm & friendly female teacher (Recommended for kids)
  * - 'Puck': Playful & cheerful voice
  * - 'Kore': Gentle & soft tone
  * - 'Fenrir': Energetic & confident

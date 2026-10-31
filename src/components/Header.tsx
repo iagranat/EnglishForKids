@@ -2,20 +2,37 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { GeminiVoiceName } from '../services/geminiTtsService';
+
 interface HeaderProps {
   stars: number;
   showHebrewHints: boolean;
   onToggleHebrewHints: () => void;
   onOpenGeminiSettings: () => void;
-  hasGeminiKey: boolean;
+  currentVoice: GeminiVoiceName;
 }
+
+const getVoiceEmoji = (voice: GeminiVoiceName): string => {
+  switch (voice) {
+    case 'Aoede':
+      return '👩';
+    case 'Puck':
+      return '👦';
+    case 'Kore':
+      return '🌸';
+    case 'Fenrir':
+      return '🦁';
+    default:
+      return '👩';
+  }
+};
 
 export const Header: React.FC<HeaderProps> = ({
   stars,
   showHebrewHints,
   onToggleHebrewHints,
   onOpenGeminiSettings,
-  hasGeminiKey,
+  currentVoice,
 }) => {
   return (
     <View style={styles.container}>
@@ -32,25 +49,14 @@ export const Header: React.FC<HeaderProps> = ({
       </View>
 
       <View style={styles.actionsRow}>
-        {/* Gemini AI Voice toggle / settings */}
+        {/* Gemini Teacher Voice Button */}
         <TouchableOpacity
-          style={[styles.geminiBtn, hasGeminiKey && styles.geminiBtnActive]}
+          style={styles.geminiBtn}
           onPress={onOpenGeminiSettings}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name="sparkles"
-            size={13}
-            color={hasGeminiKey ? '#FFFFFF' : '#7209B7'}
-          />
-          <Text
-            style={[
-              styles.geminiBtnText,
-              hasGeminiKey && styles.geminiBtnTextActive,
-            ]}
-          >
-            AI Voice
-          </Text>
+          <Text style={{ fontSize: 13 }}>{getVoiceEmoji(currentVoice)}</Text>
+          <Text style={styles.geminiBtnText}>{currentVoice}</Text>
         </TouchableOpacity>
 
         {/* Hebrew hints toggle */}

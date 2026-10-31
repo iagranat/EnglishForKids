@@ -15,7 +15,7 @@ import { PhonicsQuizScreen } from './src/screens/PhonicsQuizScreen';
 import { TracingScreen } from './src/screens/TracingScreen';
 import { WordBlendScreen } from './src/screens/WordBlendScreen';
 import { LetterItem, ALPHABET_DATA } from './src/data/alphabetData';
-import { geminiTts } from './src/services/geminiTtsService';
+import { geminiTts, GeminiVoiceName } from './src/services/geminiTtsService';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<AppTab>('letters');
@@ -23,7 +23,7 @@ export default function App() {
   const [showHebrewHints, setShowHebrewHints] = useState(true);
   const [tracingLetter, setTracingLetter] = useState<LetterItem>(ALPHABET_DATA[0]);
   const [showGeminiModal, setShowGeminiModal] = useState(false);
-  const [hasGeminiKey, setHasGeminiKey] = useState(geminiTts.hasApiKey());
+  const [currentVoice, setCurrentVoice] = useState<GeminiVoiceName>(() => geminiTts.getVoice());
 
   const handleAddStars = (amount: number) => {
     setStars((prev) => prev + amount);
@@ -86,16 +86,18 @@ export default function App() {
           showHebrewHints={showHebrewHints}
           onToggleHebrewHints={() => setShowHebrewHints((prev) => !prev)}
           onOpenGeminiSettings={() => setShowGeminiModal(true)}
-          hasGeminiKey={hasGeminiKey}
+          currentVoice={currentVoice}
         />
         <View style={styles.contentContainer}>{renderScreen()}</View>
         <TabNavigation currentTab={currentTab} onSelectTab={setCurrentTab} />
 
         <GeminiSettingsModal
           visible={showGeminiModal}
-          onClose={() => {
+          onClose={(newVoice) => {
             setShowGeminiModal(false);
-            setHasGeminiKey(geminiTts.hasApiKey());
+            if (newVoice) {
+              setCurrentVoice(newVoice);
+            }
           }}
         />
       </SafeAreaView>
