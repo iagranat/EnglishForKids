@@ -31,7 +31,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: true,
     color: '#FF6B6B',
     badgeColor: '#FFE3E3',
-    soundSentence: 'A is for Apple. /æ/ /æ/ Apple!',
+    soundSentence: 'A is for Apple. Ah, ah, Apple!',
     hebrewTip: 'אות תנועה! משמשת כמו ניקוד באנגלית (פתח/קמץ).'
   },
   {
@@ -48,7 +48,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#4ECDC4',
     badgeColor: '#E0F7F6',
-    soundSentence: 'B is for Bear. /b/ /b/ Bear!',
+    soundSentence: 'B is for Bear. Buh, buh, Bear!',
     hebrewTip: 'בדיוק כמו בּ דגושה בעברית. שימו לב: b קטנה פונה ימינה.'
   },
   {
@@ -65,7 +65,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#FFBE0B',
     badgeColor: '#FFF3D6',
-    soundSentence: 'C is for Cat. /k/ /k/ Cat!',
+    soundSentence: 'C is for Cat. Kuh, kuh, Cat!',
     hebrewTip: 'לרוב נשמעת כמו ק (Cat, Car), ולפני e, i, y נשמעת כמו ס (City).'
   },
   {
@@ -82,7 +82,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#3A86FF',
     badgeColor: '#E3EDFF',
-    soundSentence: 'D is for Dog. /d/ /d/ Dog!',
+    soundSentence: 'D is for Dog. Duh, duh, Dog!',
     hebrewTip: 'כמו ד בעברית. שימו לב לא להתבלבל בין b ובין d (הבטן של d פונה שמאלה).'
   },
   {
@@ -99,7 +99,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: true,
     color: '#FB5607',
     badgeColor: '#FFE7DE',
-    soundSentence: 'E is for Elephant. /e/ /e/ Elephant!',
+    soundSentence: 'E is for Elephant. Eh, eh, Elephant!',
     hebrewTip: 'אות תנועה מרכזית! כמו צירה או סגול.'
   },
   {
@@ -107,7 +107,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'F',
     lower: 'f',
     name: 'Eff',
-    phonics: 'fff',
+    phonics: 'fuh',
     phonemeDisplay: '/f/',
     hebrewSoundHint: 'פ (רפה)',
     exampleWord: 'Fish',
@@ -116,7 +116,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#8338EC',
     badgeColor: '#EFE7FD',
-    soundSentence: 'F is for Fish. /f/ /f/ Fish!',
+    soundSentence: 'F is for Fish. Fuh, fuh, Fish!',
     hebrewTip: 'כמו פ רפה בעברית. השיניים העליונות נוגעות בשפה התחתונה.'
   },
   {
@@ -133,7 +133,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#06D6A0',
     badgeColor: '#DEFAF1',
-    soundSentence: 'G is for Guitar. /g/ /g/ Guitar!',
+    soundSentence: 'G is for Guitar. Guh, guh, Guitar!',
     hebrewTip: 'בדרך כלל צליל ג (Good, Game), ולפעמים צליל ג׳ (Giraffe).'
   },
   {
@@ -150,7 +150,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#118AB2',
     badgeColor: '#E0F2F7',
-    soundSentence: 'H is for Hat. /h/ /h/ Hat!',
+    soundSentence: 'H is for Hat. Huh, huh, Hat!',
     hebrewTip: 'כמו ה ברורה עם אוויר ונשיפה מהגרון.'
   },
   {
@@ -167,7 +167,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: true,
     color: '#EF476F',
     badgeColor: '#FDE4EA',
-    soundSentence: 'I is for Igloo. /ɪ/ /ɪ/ Igloo!',
+    soundSentence: 'I is for Igloo. Ih, ih, Igloo!',
     hebrewTip: 'אות תנועה! בדרך כלל נשמעת כמו חיריק (In, Big), או איי (Ice).'
   },
   {
@@ -184,7 +184,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#FF9F1C',
     badgeColor: '#FFF1E0',
-    soundSentence: 'J is for Jellyfish. /dʒ/ /dʒ/ Jellyfish!',
+    soundSentence: 'J is for Jellyfish. Juh, juh, Jellyfish!',
     hebrewTip: 'כמו האות ג׳ עם גרש בעברית (ג׳ירפה, ג׳אמפ).'
   },
   {
@@ -201,7 +201,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#2EC4B6',
     badgeColor: '#E0F8F6',
-    soundSentence: 'K is for Kangaroo. /k/ /k/ Kangaroo!',
+    soundSentence: 'K is for Kangaroo. Kuh, kuh, Kangaroo!',
     hebrewTip: 'תמיד נשמעת ק! לעיתים שקטה לפני n (כמו במילה Knee - ברך).'
   },
   {
@@ -209,7 +209,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'L',
     lower: 'l',
     name: 'El',
-    phonics: 'lll',
+    phonics: 'luh',
     phonemeDisplay: '/l/',
     hebrewSoundHint: 'ל',
     exampleWord: 'Lion',
@@ -218,7 +218,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#F77F00',
     badgeColor: '#FEEDDC',
-    soundSentence: 'L is for Lion. /l/ /l/ Lion!',
+    soundSentence: 'L is for Lion. Luh, luh, Lion!',
     hebrewTip: 'בדיוק כמו ל בעברית. הלשון נוגעת בחלק העליון של הפה.'
   },
   {
@@ -226,7 +226,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'M',
     lower: 'm',
     name: 'Em',
-    phonics: 'mmm',
+    phonics: 'muh',
     phonemeDisplay: '/m/',
     hebrewSoundHint: 'מ',
     exampleWord: 'Monkey',
@@ -235,7 +235,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#7209B7',
     badgeColor: '#EED9F6',
-    soundSentence: 'M is for Monkey. /m/ /m/ Monkey!',
+    soundSentence: 'M is for Monkey. Muh, muh, Monkey!',
     hebrewTip: 'כמו מ בעברית. סוגרים את השפתיים ומשמיעים המממ...'
   },
   {
@@ -243,7 +243,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'N',
     lower: 'n',
     name: 'En',
-    phonics: 'nnn',
+    phonics: 'nuh',
     phonemeDisplay: '/n/',
     hebrewSoundHint: 'נ',
     exampleWord: 'Nest',
@@ -252,7 +252,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#4361EE',
     badgeColor: '#E3E8FC',
-    soundSentence: 'N is for Nest. /n/ /n/ Nest!',
+    soundSentence: 'N is for Nest. Nuh, nuh, Nest!',
     hebrewTip: 'כמו נ בעברית. הקצה של הלשון נוגע מאחורי השיניים העליונות.'
   },
   {
@@ -269,7 +269,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: true,
     color: '#E63946',
     badgeColor: '#FDE4E6',
-    soundSentence: 'O is for Octopus. /ɒ/ /ɒ/ Octopus!',
+    soundSentence: 'O is for Octopus. Aw, aw, Octopus!',
     hebrewTip: 'אות תנועה עגולה! נשמעת כמו אוֹ (Open) או אָה (Octopus, On).'
   },
   {
@@ -286,7 +286,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#4895EF',
     badgeColor: '#E4F0FD',
-    soundSentence: 'P is for Penguin. /p/ /p/ Penguin!',
+    soundSentence: 'P is for Penguin. Puh, puh, Penguin!',
     hebrewTip: 'כמו פּ דגושה. נשיפת אוויר מהשפתיים.'
   },
   {
@@ -303,7 +303,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#9D4EDD',
     badgeColor: '#F2E6FC',
-    soundSentence: 'Q is for Queen. /kw/ /kw/ Queen!',
+    soundSentence: 'Q is for Queen. Kwuh, kwuh, Queen!',
     hebrewTip: 'חוק מיוחד: באנגלית Q כמעט תמיד הולכת ביחד עם U ויוצרת "קוו" (Queen, Quick).'
   },
   {
@@ -311,7 +311,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'R',
     lower: 'r',
     name: 'Ar',
-    phonics: 'rrr',
+    phonics: 'ruh',
     phonemeDisplay: '/r/',
     hebrewSoundHint: 'ר (עגולה, אמריקאית)',
     exampleWord: 'Robot',
@@ -320,7 +320,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#00AFB9',
     badgeColor: '#D8F6F8',
-    soundSentence: 'R is for Robot. /r/ /r/ Robot!',
+    soundSentence: 'R is for Robot. Ruh, ruh, Robot!',
     hebrewTip: 'ר אנגלית: הלשון מתעגלת לאחור בלי לרטוט כמו בעברית.'
   },
   {
@@ -328,7 +328,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'S',
     lower: 's',
     name: 'Ess',
-    phonics: 'sss',
+    phonics: 'suh',
     phonemeDisplay: '/s/',
     hebrewSoundHint: 'ס / שׂ',
     exampleWord: 'Sun',
@@ -337,7 +337,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#F4A261',
     badgeColor: '#FDEEE4',
-    soundSentence: 'S is for Sun. /s/ /s/ Sun!',
+    soundSentence: 'S is for Sun. Suh, suh, Sun!',
     hebrewTip: 'כמו ס בעברית (צליל של נחש: סססס). בשילוב עם h נהיית Sh (כמו שׁ ימנית).'
   },
   {
@@ -354,7 +354,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#E76F51',
     badgeColor: '#FCEAE6',
-    soundSentence: 'T is for Tiger. /t/ /t/ Tiger!',
+    soundSentence: 'T is for Tiger. Tuh, tuh, Tiger!',
     hebrewTip: 'כמו ט/ת בעברית עם נקישה קטנה של הלשון.'
   },
   {
@@ -371,7 +371,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: true,
     color: '#2A9D8F',
     badgeColor: '#D9F2EF',
-    soundSentence: 'U is for Umbrella. /ʌ/ /ʌ/ Umbrella!',
+    soundSentence: 'U is for Umbrella. Uh, uh, Umbrella!',
     hebrewTip: 'אות תנועה! נשמעת כמו אַ קצר (Up, Sun, Cup) או יוּ (Music).'
   },
   {
@@ -379,7 +379,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'V',
     lower: 'v',
     name: 'Vee',
-    phonics: 'vvv',
+    phonics: 'vuh',
     phonemeDisplay: '/v/',
     hebrewSoundHint: 'ו / ב (רפה)',
     exampleWord: 'Volcano',
@@ -388,7 +388,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#588157',
     badgeColor: '#E5EFE5',
-    soundSentence: 'V is for Volcano. /v/ /v/ Volcano!',
+    soundSentence: 'V is for Volcano. Vuh, vuh, Volcano!',
     hebrewTip: 'כמו ו או ב רפה בעברית עם רטט קל בשפתיים.'
   },
   {
@@ -405,7 +405,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#3D5A80',
     badgeColor: '#E2EAF1',
-    soundSentence: 'W is for Watermelon. /w/ /w/ Watermelon!',
+    soundSentence: 'W is for Watermelon. Wuh, wuh, Watermelon!',
     hebrewTip: 'מעגלים שפתיים כמו שריקה ומשמיעים "וו" (Water, Win). צליל שאין אות מקבילה לו בעברית!'
   },
   {
@@ -413,17 +413,17 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'X',
     lower: 'x',
     name: 'Ex',
-    phonics: 'ks',
+    phonics: 'ecks',
     phonemeDisplay: '/ks/',
     hebrewSoundHint: 'קְס (כמו ב-Fox)',
-    exampleWord: 'Xylophone',
-    exampleHebrew: 'קסילופון',
-    emoji: '🎵',
+    exampleWord: 'Fox',
+    exampleHebrew: 'שועל',
+    emoji: '🦊',
     isVowel: false,
     color: '#D90429',
     badgeColor: '#FBD8DE',
-    soundSentence: 'X is for Xylophone. /z/ or /ks/ sound!',
-    hebrewTip: 'בסוף מילה נשמעת קְס (Fox, Box), ובתחילת מילה לעיתים כמו ז (Xylophone).'
+    soundSentence: 'X is for Fox. Ecks, ecks, Fox!',
+    hebrewTip: 'בסוף מילה נשמעת קְס (כמו במילה Fox או Box).'
   },
   {
     id: 'y',
@@ -439,7 +439,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#E09F3E',
     badgeColor: '#FCF3E5',
-    soundSentence: 'Y is for Yo-yo. /j/ /j/ Yo-yo!',
+    soundSentence: 'Y is for Yo-yo. Yuh, yuh, Yo-yo!',
     hebrewTip: 'אות גמישה! בתחילת מילה נשמעת כמו י (Yes, Yellow), ובסוף מילה משמשת כתנועה (Happy, Sky).'
   },
   {
@@ -447,7 +447,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     upper: 'Z',
     lower: 'z',
     name: 'Zee',
-    phonics: 'zzz',
+    phonics: 'zuh',
     phonemeDisplay: '/z/',
     hebrewSoundHint: 'ז (זמזום דבורה)',
     exampleWord: 'Zebra',
@@ -456,7 +456,7 @@ export const ALPHABET_DATA: LetterItem[] = [
     isVowel: false,
     color: '#606C38',
     badgeColor: '#E9EBE2',
-    soundSentence: 'Z is for Zebra. /z/ /z/ Zebra!',
+    soundSentence: 'Z is for Zebra. Zuh, zuh, Zebra!',
     hebrewTip: 'כמו ז בעברית. משמיעים זמזום כמו דבורה (זזזזז).'
   }
 ];

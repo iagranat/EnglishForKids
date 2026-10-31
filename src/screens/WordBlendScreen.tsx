@@ -7,7 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CVC_WORDS, SimpleWordItem } from '../data/alphabetData';
+import { CVC_WORDS, SimpleWordItem, ALPHABET_DATA } from '../data/alphabetData';
 import { soundService } from '../services/soundService';
 
 interface WordBlendScreenProps {
@@ -23,19 +23,30 @@ export const WordBlendScreen: React.FC<WordBlendScreenProps> = ({
   const [blended, setBlended] = useState(false);
   const currentWord: SimpleWordItem = CVC_WORDS[currentIndex];
 
+  const getPhonicsSoundForChar = (char: string) => {
+    const found = ALPHABET_DATA.find(
+      (l) => l.upper === char.toUpperCase() || l.lower === char.toLowerCase()
+    );
+    return found ? found.phonics : char;
+  };
+
   const handleTapLetter = async (char: string) => {
-    // Speak letter phonics sound
-    await soundService.speak(char, { rate: 0.75, pitch: 1.1 });
+    // Speak the actual phonics sound of the letter
+    const phonicsSound = getPhonicsSoundForChar(char);
+    await soundService.speak(phonicsSound, { rate: 0.75, pitch: 1.1 });
   };
 
   const handleBlendWord = async () => {
     setBlended(true);
     await soundService.playSuccessSound();
 
-    // Speak letter-by-letter then blend
-    const lettersSpaced = currentWord.letters.join(' ... ');
+    // Speak phonics sound of each letter then the full blended word
+    const phonicsList = currentWord.letters.map((char) => getPhonicsSoundForChar(char));
+    const phonicsSpaced = phonicsList.join(' ... ');
+
     await soundService.speak(
-      `${lettersSpaced} ... ${currentWord.word}! ${currentWord.word} means ${currentWord.hebrew}.`
+      `${phonicsSpaced} ... ${currentWord.word}! ${currentWord.word} means ${currentWord.hebrew}.`,
+      { rate: 0.8, pitch: 1.05 }
     );
     onAddStars(2);
   };

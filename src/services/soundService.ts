@@ -93,9 +93,8 @@ class SoundService {
    */
   async speakPhonicsSound(letter: LetterItem) {
     await this.triggerHaptic('light');
-    // Using clear phonics phrasing: e.g. "The letter B says /buh/ as in Bear" or just the sound
-    const phonicsPhrase = `${letter.upper} says ${letter.phonics}, like in ${letter.exampleWord}`;
-    await this.speak(phonicsPhrase, { rate: 0.85, pitch: 1.05 });
+    const phonicsPhrase = `The letter ${letter.upper} says ${letter.phonics}, like in ${letter.exampleWord}. ${letter.phonics}!`;
+    await this.speak(phonicsPhrase, { rate: 0.8, pitch: 1.05 });
   }
 
   /**

@@ -34,9 +34,15 @@ const createQuizQuestion = (): QuizQuestion => {
 
 const playPromptAudio = async (target: LetterItem, type: 'phonics' | 'word') => {
   if (type === 'phonics') {
-    await soundService.speak(`Listen carefully! Which letter makes the sound: ${target.phonics}?`);
+    await soundService.speak(
+      `Listen carefully. Which letter makes the sound: ${target.phonics}? ... ${target.phonics}!`,
+      { rate: 0.8, pitch: 1.05 }
+    );
   } else {
-    await soundService.speak(`Which letter starts the word: ${target.exampleWord}?`);
+    await soundService.speak(
+      `Which letter starts the word: ${target.exampleWord}?`,
+      { rate: 0.85, pitch: 1.05 }
+    );
   }
 };
 
@@ -85,18 +91,20 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       setStreak((prev) => prev + 1);
       onAddStars(2);
       await soundService.speak(
-        `Correct! ${option.upper} is for ${currentQuestion.targetLetter.exampleWord}!`
+        `Correct! The letter ${option.upper} makes the sound ${currentQuestion.targetLetter.phonics}, like in ${currentQuestion.targetLetter.exampleWord}!`,
+        { rate: 0.85, pitch: 1.05 }
       );
 
       // Auto advance to next question
       setTimeout(() => {
         generateQuestion();
-      }, 1800);
+      }, 2000);
     } else {
       await soundService.playErrorSound();
       setStreak(0);
       await soundService.speak(
-        `That was ${option.upper}. Try again to find the right sound!`
+        `That was ${option.upper}. Try again to find the letter that sounds like ${currentQuestion.targetLetter.phonics}!`,
+        { rate: 0.85, pitch: 1.05 }
       );
       setIsAnswering(false);
     }
