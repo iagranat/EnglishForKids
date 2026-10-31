@@ -443,9 +443,14 @@ class GeminiTtsService {
       try {
         const alreadyCached = await this.isCached(item.text, item.voice);
         if (!alreadyCached) {
-          await this.generateSpeech(item.text, item.voice);
-          // 200ms spacing between cloud requests
-          await new Promise((r) => setTimeout(r, 200));
+          const res = await this.generateSpeech(item.text, item.voice);
+          if (!res) {
+            // Rate limit or temporary error - back off 3s to respect RPM quota
+            await new Promise((r) => setTimeout(r, 3000));
+          } else {
+            // Gentle 800ms spacing between cloud requests
+            await new Promise((r) => setTimeout(r, 800));
+          }
         }
       } catch (err) {
         console.warn('Pre-cache queue item error:', err);

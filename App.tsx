@@ -27,14 +27,6 @@ export default function App() {
   const [currentVoice, setCurrentVoice] = useState<GeminiVoiceName>(() => geminiTts.getVoice());
   const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => geminiTts.getVoiceMode());
 
-  // Background pre-warming of common alphabet sounds on app launch
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      geminiTts.prewarmCommonSounds(ALPHABET_DATA);
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [currentVoice]);
-
   const handleSelectTab = (tab: AppTab) => {
     if (tab === currentTab) return;
     geminiTts.clearPendingPrefetch();
