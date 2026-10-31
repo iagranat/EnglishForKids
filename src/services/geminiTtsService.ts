@@ -208,11 +208,45 @@ class GeminiTtsService {
       await setAudioModeAsync({ playsInSilentMode: true });
       const player = createAudioPlayer(uri);
       this.currentPlayer = player;
+
+      let calledDone = false;
+      let subscription: { remove: () => void } | null = null;
+      let safetyTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      const triggerDone = () => {
+        if (!calledDone) {
+          calledDone = true;
+          if (safetyTimeout) {
+            clearTimeout(safetyTimeout);
+            safetyTimeout = null;
+          }
+          try {
+            subscription?.remove();
+          } catch {
+            // ignore
+          }
+          onDone?.();
+        }
+      };
+
+      subscription = player.addListener('playbackStatusUpdate', (status) => {
+        if (
+          status.didJustFinish ||
+          (!status.playing &&
+            status.currentTime > 0 &&
+            status.duration > 0 &&
+            status.currentTime >= status.duration - 0.2)
+        ) {
+          triggerDone();
+        }
+      });
+
       player.play();
 
-      setTimeout(() => {
-        onDone?.();
-      }, 2500);
+      // Generous safety fallback timeout: 15s in case player events are missed
+      safetyTimeout = setTimeout(() => {
+        triggerDone();
+      }, 15000);
     } catch (err) {
       console.warn('Expo-audio playback error:', err);
       onDone?.();
@@ -606,7 +640,10 @@ class GeminiTtsService {
   /**
    * Speak dynamic celebratory praise
    */
-  async speakEncouragement(context: 'match_win' | 'streak_3' | 'streak_5' | 'blend_success' | 'round_complete') {
+  async speakEncouragement(
+    context: 'match_win' | 'streak_3' | 'streak_5' | 'blend_success' | 'round_complete',
+    onDone?: () => void
+  ) {
     const ENCOURAGEMENTS: Record<typeof context, string[]> = {
       match_win: [
         'Brilliant match! You are super fast!',
@@ -633,7 +670,7 @@ class GeminiTtsService {
 
     const choices = ENCOURAGEMENTS[context];
     const phrase = choices[Math.floor(Math.random() * choices.length)];
-    await this.speak(phrase);
+    await this.speak(phrase, { onDone });
   }
 }
 

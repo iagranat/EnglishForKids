@@ -58,6 +58,16 @@ class SoundService {
   }
 
   /**
+   * Speak dynamic celebratory encouragement
+   */
+  async speakEncouragement(
+    context: 'match_win' | 'streak_3' | 'streak_5' | 'blend_success' | 'round_complete',
+    onDone?: () => void
+  ) {
+    await geminiTts.speakEncouragement(context, onDone);
+  }
+
+  /**
    * Play error tone
    */
   async playErrorSound() {

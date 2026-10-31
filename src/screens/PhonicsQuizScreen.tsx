@@ -86,6 +86,7 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
   }, [currentQuestion]);
 
   const generateQuestion = () => {
+    geminiTts.stopCurrentPlayback();
     const nextQ = nextQuestionRef.current;
     setCurrentQuestion(nextQ);
     nextQuestionRef.current = createQuizQuestion();
@@ -114,20 +115,39 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       setStreak(nextStreak);
       onAddStars(2);
 
+      let hasAdvanced = false;
+      const advanceToNext = () => {
+        if (!hasAdvanced) {
+          hasAdvanced = true;
+          // Give a comfortable 700ms pause AFTER speech finishes completely
+          setTimeout(() => {
+            generateQuestion();
+          }, 700);
+        }
+      };
+
+      // Safety fallback timer: in case event is delayed, advance after 8s
+      const safetyTimer = setTimeout(() => {
+        advanceToNext();
+      }, 8000);
+
+      const onSpeechDone = () => {
+        clearTimeout(safetyTimer);
+        advanceToNext();
+      };
+
       if (nextStreak === 3) {
-        await geminiTts.speakEncouragement('streak_3');
+        await geminiTts.speakEncouragement('streak_3', onSpeechDone);
       } else if (nextStreak === 5) {
-        await geminiTts.speakEncouragement('streak_5');
+        await geminiTts.speakEncouragement('streak_5', onSpeechDone);
       } else {
         await geminiTts.speak(
-          `Correct! The letter ${option.upper} makes the sound ${currentQuestion.targetLetter.phonics}, like in ${currentQuestion.targetLetter.exampleWord}!`
+          `Correct! The letter ${option.upper} makes the sound ${currentQuestion.targetLetter.phonics}, like in ${currentQuestion.targetLetter.exampleWord}!`,
+          {
+            onDone: onSpeechDone,
+          }
         );
       }
-
-      // Auto advance to next question
-      setTimeout(() => {
-        generateQuestion();
-      }, 2000);
     } else {
       await soundService.playErrorSound();
       setStreak(0);
