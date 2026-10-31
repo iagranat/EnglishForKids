@@ -85,12 +85,12 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       playPromptAudio(currentQuestion.targetLetter, currentQuestion.type);
     }, 400);
 
-    // 2. Pre-cache ALL possible response sounds for this current question:
-    // a) The correct response phrase (High Priority)
+    // 2. Pre-cache ALL possible response sounds for this current question IMMEDIATELY:
+    // a) The correct response phrase (Immediate Fast-Path)
     const correctPhrase = getCorrectResponseText(currentQuestion.targetLetter);
-    geminiTts.prefetch(correctPhrase, undefined, 'high');
+    geminiTts.prefetchImmediate(correctPhrase);
 
-    // b) The incorrect response phrases for all 3 distractors (High Priority)
+    // b) The incorrect response phrases for all 3 distractors (Immediate Fast-Path)
     currentQuestion.options.forEach((opt) => {
       if (opt.id !== currentQuestion.targetLetter.id) {
         const incorrectPhrase = getIncorrectResponseText(
@@ -98,7 +98,7 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
           currentQuestion.targetLetter,
           currentQuestion.type
         );
-        geminiTts.prefetch(incorrectPhrase, undefined, 'high');
+        geminiTts.prefetchImmediate(incorrectPhrase);
       }
     });
 
@@ -106,14 +106,24 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
     geminiTts.prefetch('Three in a row! Your ears are incredible!', undefined, 'normal');
     geminiTts.prefetch('Five in a row! You are an absolute phonics superstar!', undefined, 'normal');
 
-    // 3. Predictive background prefetch for the NEXT question!
-    // While the child is looking at or answering the current question,
-    // pre-fetch the next card's prompt so it's ready in advance.
+    // 3. Predictive prefetch for the NEXT question:
+    // Pre-cache upcoming card's prompt, correct phrase, and all 3 failure sounds!
     const nextQ = nextQuestionRef.current;
     if (nextQ) {
       const nextPrompt = getPromptText(nextQ.targetLetter, nextQ.type);
+      const nextCorrect = getCorrectResponseText(nextQ.targetLetter);
       geminiTts.prefetchImmediate(nextPrompt);
-      geminiTts.prefetch(getCorrectResponseText(nextQ.targetLetter), undefined, 'normal');
+      geminiTts.prefetchImmediate(nextCorrect);
+      nextQ.options.forEach((opt) => {
+        if (opt.id !== nextQ.targetLetter.id) {
+          const nextIncorrect = getIncorrectResponseText(
+            opt,
+            nextQ.targetLetter,
+            nextQ.type
+          );
+          geminiTts.prefetchImmediate(nextIncorrect);
+        }
+      });
     }
 
     return () => clearTimeout(timer);
@@ -145,13 +155,23 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
     if (isCorrect) {
       // 🚀 CRITICAL ZERO-LATENCY PRE-FETCH:
       // While the current card plays the ending sound (success chime + teacher congratulations, ~4-5s),
-      // immediately start downloading the opening prompt sentence for the NEXT card!
-      // By the time the teacher finishes congratulating, the next card's audio is 100% cached on disk.
+      // download the NEXT card's prompt, correct phrase, AND all 3 failure sounds!
       const nextQ = nextQuestionRef.current;
       if (nextQ) {
         const nextPrompt = getPromptText(nextQ.targetLetter, nextQ.type);
+        const nextCorrect = getCorrectResponseText(nextQ.targetLetter);
         geminiTts.prefetchImmediate(nextPrompt);
-        geminiTts.prefetch(getCorrectResponseText(nextQ.targetLetter), undefined, 'high');
+        geminiTts.prefetchImmediate(nextCorrect);
+        nextQ.options.forEach((opt) => {
+          if (opt.id !== nextQ.targetLetter.id) {
+            const nextIncorrect = getIncorrectResponseText(
+              opt,
+              nextQ.targetLetter,
+              nextQ.type
+            );
+            geminiTts.prefetchImmediate(nextIncorrect);
+          }
+        });
       }
 
       await soundService.playSuccessSound();
@@ -187,6 +207,7 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
         await geminiTts.speakEncouragement('streak_5', onSpeechDone);
       } else {
         await geminiTts.speak(getCorrectResponseText(currentQuestion.targetLetter), {
+          instantFallbackIfUncached: false,
           onDone: onSpeechDone,
         });
       }
@@ -198,7 +219,9 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
         currentQuestion.targetLetter,
         currentQuestion.type
       );
-      await soundService.speak(incorrectPhrase, { rate: 0.85, pitch: 1.05 });
+      await geminiTts.speak(incorrectPhrase, {
+        instantFallbackIfUncached: false,
+      });
       setIsAnswering(false);
     }
   };

@@ -88,6 +88,7 @@ class GeminiTtsService {
   private precacheActive = false;
   private queuedSet: Set<string> = new Set();
   private inFlightRequests: Map<string, Promise<string | null>> = new Map();
+  private modelCooldowns: Map<string, number> = new Map();
 
   constructor() {
     this.init();
@@ -288,12 +289,17 @@ class GeminiTtsService {
 
     const fetchPromise = (async (): Promise<string | null> => {
       try {
-        // Prioritize low-latency 3.8-flash-lite-tts, then 2.5-flash-preview-tts, then 3.8-flash-tts
-        const models = ['gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts', 'gemini-3.8-flash-tts'];
+        // Prioritize reliable gemini-2.5-flash-preview-tts, then 3.8-flash-lite-tts, then 3.8-flash-tts
+        const models = ['gemini-2.5-flash-preview-tts', 'gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'];
         let base64Audio: string | null = null;
         let returnedMime = 'audio/wav';
 
         for (const model of models) {
+          // Skip model if temporarily cooled down due to 429 quota exhaustion
+          if ((this.modelCooldowns.get(model) || 0) > Date.now()) {
+            continue;
+          }
+
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
 
           try {
@@ -322,6 +328,10 @@ class GeminiTtsService {
                 break;
               }
             } else {
+              if (res.status === 429) {
+                // Cooldown for 5 minutes so other requests bypass it immediately
+                this.modelCooldowns.set(model, Date.now() + 5 * 60 * 1000);
+              }
               const errText = await res.text();
               console.warn(`Gemini TTS (${model}) error:`, errText);
             }
@@ -443,6 +453,19 @@ class GeminiTtsService {
       .finally(() => {
         this.queuedSet.delete(key);
       });
+  }
+
+  /**
+   * Fast-path batch pre-fetch: initiates speech generation immediately in parallel
+   * for a list of phrases without queue delays.
+   */
+  async prefetchImmediateMany(phrases: string[], voiceOverride?: GeminiVoiceName): Promise<void> {
+    if (!this.hasApiKey() || this.voiceMode === 'native') return;
+    for (const phrase of phrases) {
+      if (phrase && phrase.trim()) {
+        this.prefetchImmediate(phrase, voiceOverride);
+      }
+    }
   }
 
   /**
