@@ -13,22 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { ALPHABET_DATA, LetterItem } from '../data/alphabetData';
 import { soundService } from '../services/soundService';
 import { geminiTts } from '../services/geminiTtsService';
+import { evaluateLetterTracing, TracingEvaluationResult } from '../utils/letterSkeletons';
 
 interface Point {
   x: number;
   y: number;
   color: string;
-}
-
-interface TracingEvaluation {
-  status: 'empty' | 'incomplete' | 'good' | 'excellent';
-  starsAwarded: number;
-  scorePercent: number;
-  isLeftToRight: boolean;
-  titleEn: string;
-  titleHe: string;
-  messageEn: string;
-  messageHe: string;
 }
 
 interface TracingScreenProps {
@@ -50,7 +40,8 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
   const [isUpper, setIsUpper] = useState(true);
   const [activeColor, setActiveColor] = useState(COLORS[0]);
   const [points, setPoints] = useState<Point[]>([]);
-  const [evaluationResult, setEvaluationResult] = useState<TracingEvaluation | null>(null);
+  const [evaluationResult, setEvaluationResult] = useState<TracingEvaluationResult | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 360, height: 290 });
 
   const currentLetterIdx = ALPHABET_DATA.findIndex((l) => l.id === currentLetter.id);
   const nextLetter = ALPHABET_DATA[(currentLetterIdx + 1) % ALPHABET_DATA.length];
@@ -149,84 +140,35 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
   };
 
   const handleFinishPractice = async () => {
-    // 1. Empty Check - Nothing was drawn
-    if (points.length === 0) {
-      const emptyEval: TracingEvaluation = {
-        status: 'empty',
-        starsAwarded: 0,
-        scorePercent: 0,
-        isLeftToRight: false,
-        titleEn: 'Start Tracing! ✍️',
-        titleHe: 'בואו נתחיל לכתוב! ✍️',
-        messageEn: "You haven't written anything yet! Follow the letter outline with your finger.",
-        messageHe: 'עדיין לא ציירתם דבר! עקבו עם האצבע אחרי קווי האות כדי לתרגל כתיבה.',
-      };
-      setEvaluationResult(emptyEval);
+    const char = isUpper ? currentLetter.upper : currentLetter.lower;
+    const evalResult = evaluateLetterTracing(
+      char,
+      isUpper,
+      points,
+      canvasSize.width,
+      canvasSize.height
+    );
+
+    setEvaluationResult(evalResult);
+
+    if (evalResult.status === 'empty') {
       await soundService.speak("You haven't written anything yet! Follow the letter outline with your finger.");
       return;
     }
 
-    // 2. Stroke Length & Spatial Bounding Box Check
-    const xs = points.map((p) => p.x);
-    const ys = points.map((p) => p.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const spanX = maxX - minX;
-    const spanY = maxY - minY;
-
-    if (points.length < 15 || (spanX < 35 && spanY < 35)) {
-      const incompleteEval: TracingEvaluation = {
-        status: 'incomplete',
-        starsAwarded: 0,
-        scorePercent: Math.min(35, Math.round((points.length / 25) * 40)),
-        isLeftToRight: false,
-        titleEn: 'Almost There! ✏️',
-        titleHe: 'כמעט! המשיכו לכתוב ✏️',
-        messageEn: 'Good start! Trace more of the letter shape to complete it.',
-        messageHe: 'התחלה טובה! ציירו עוד מחלקי האות כדי להשלים את התרגול.',
-      };
-      setEvaluationResult(incompleteEval);
-      await soundService.speak('Good start! Trace more of the letter shape to complete it.');
+    if (evalResult.status === 'incomplete') {
+      await soundService.speak(evalResult.messageEn);
       return;
     }
 
-    // 3. Direction Check (Left-to-Right bonus)
-    const quarter = Math.max(2, Math.floor(points.length / 4));
-    const startPoints = points.slice(0, quarter);
-    const endPoints = points.slice(points.length - quarter);
-    const avgStartX = startPoints.reduce((sum, p) => sum + p.x, 0) / startPoints.length;
-    const avgEndX = endPoints.reduce((sum, p) => sum + p.x, 0) / endPoints.length;
-    const isLeftToRight = avgEndX - avgStartX > 10;
-
-    // 4. Quality Rating (2 or 3 stars)
-    const isExcellent = points.length >= 35 && (spanY >= 65 || spanX >= 55);
-    const stars = isExcellent ? 3 : 2;
-    const score = isExcellent
-      ? Math.min(100, Math.round(82 + points.length / 4))
-      : Math.min(78, Math.round(55 + points.length / 2));
-
-    const evalResult: TracingEvaluation = {
-      status: isExcellent ? 'excellent' : 'good',
-      starsAwarded: stars,
-      scorePercent: score,
-      isLeftToRight,
-      titleEn: isExcellent ? 'Sensational Handwriting! 🌟🌟🌟' : 'Good Effort! 🌟🌟',
-      titleHe: isExcellent ? 'כתיבה מעולה ומדויקת! 🌟🌟🌟' : 'עבודה יפה מאוד! 🌟🌟',
-      messageEn: isExcellent
-        ? `You traced the letter ${currentLetter.upper} beautifully! You earned 3 stars!`
-        : `Nice tracing practice for the letter ${currentLetter.upper}! You earned 2 stars!`,
-      messageHe: isExcellent
-        ? `עקבתם אחרי האות ${currentLetter.upper} בצורה מושלמת וזכיתם ב-3 כוכבים!`
-        : `תרגול יפה של האות ${currentLetter.upper}! זכיתם ב-2 כוכבים!`,
-    };
-
-    setEvaluationResult(evalResult);
+    // Success (Good or Excellent)
     await soundService.playSuccessSound();
-    onAddStars(stars);
+    onAddStars(evalResult.starsAwarded);
 
-    const praiseText = isExcellent
-      ? `Sensational handwriting! You traced the letter ${currentLetter.upper} beautifully! You earned three stars!`
-      : `Good job! You're learning how to write the letter ${currentLetter.upper}! You earned two stars!`;
+    const praiseText =
+      evalResult.status === 'excellent'
+        ? `Sensational handwriting! You traced the letter ${char} beautifully! You earned three stars!`
+        : `Good job! You're learning how to write the letter ${char}! You earned two stars!`;
     await soundService.speak(praiseText);
   };
 
@@ -329,7 +271,16 @@ export const TracingScreen: React.FC<TracingScreenProps> = ({
       </View>
 
       {/* Tracing Canvas Area */}
-      <View style={styles.canvasContainer} {...panResponder.panHandlers}>
+      <View
+        style={styles.canvasContainer}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          if (width > 0 && height > 0) {
+            setCanvasSize({ width, height });
+          }
+        }}
+        {...panResponder.panHandlers}
+      >
         <View
           style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
           pointerEvents="none"
