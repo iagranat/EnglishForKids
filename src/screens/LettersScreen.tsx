@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
 import { ALPHABET_DATA, LetterItem } from '../data/alphabetData';
 import { LetterCard } from '../components/LetterCard';
 import { LetterDetailModal } from '../components/LetterDetailModal';
+import { geminiTts } from '../services/geminiTtsService';
 
 interface LettersScreenProps {
   showHebrewHints: boolean;
@@ -23,6 +24,17 @@ export const LettersScreen: React.FC<LettersScreenProps> = ({
 }) => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [selectedLetter, setSelectedLetter] = useState<LetterItem | null>(null);
+
+  // Pre-cache sounds for initial visible alphabet cards on page load (A-H)
+  useEffect(() => {
+    const initialLetters = ALPHABET_DATA.slice(0, 8);
+    const sounds: string[] = [];
+    initialLetters.forEach((l) => {
+      sounds.push(l.upper);
+      sounds.push(l.phonics);
+    });
+    geminiTts.prefetchMany(sounds, { priority: 'normal' });
+  }, []);
 
   const filteredLetters = ALPHABET_DATA.filter((letter) => {
     if (activeFilter === 'vowels') return letter.isVowel;

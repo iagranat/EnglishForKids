@@ -69,6 +69,12 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+interface PrecacheItem {
+  text: string;
+  voice?: GeminiVoiceName;
+  priority?: 'high' | 'normal';
+}
+
 class GeminiTtsService {
   private apiKey: string = DEFAULT_API_KEY;
   private voice: GeminiVoiceName = DEFAULT_VOICE;
@@ -78,6 +84,9 @@ class GeminiTtsService {
   private isPrewarming = false;
   private prewarmProgress = { cached: 0, total: 0 };
   private listeners: (() => void)[] = [];
+  private precacheQueue: PrecacheItem[] = [];
+  private precacheActive = false;
+  private queuedSet: Set<string> = new Set();
 
   constructor() {
     this.init();
@@ -357,14 +366,95 @@ class GeminiTtsService {
   }
 
   /**
-   * Pre-warm / pre-fetch an audio phrase in the background
+   * Pre-warm / pre-fetch an audio phrase in the background with priority queue
    */
-  async prefetch(text: string, voiceOverride?: GeminiVoiceName) {
+  async prefetch(
+    text: string,
+    voiceOverride?: GeminiVoiceName,
+    priority: 'high' | 'normal' = 'normal'
+  ) {
     if (!this.hasApiKey() || this.voiceMode === 'native') return;
-    const isAlreadyCached = await this.isCached(text, voiceOverride);
-    if (!isAlreadyCached) {
-      this.generateSpeech(text, voiceOverride).catch(() => {});
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    const activeVoice = voiceOverride || this.voice;
+    const key = `${activeVoice}:${cleanText.toLowerCase()}`;
+
+    // Fast check if already queued
+    if (this.queuedSet.has(key)) return;
+
+    // Check if already in cache (0 cost, 0 network)
+    const cached = await this.isCached(cleanText, activeVoice);
+    if (cached) return;
+
+    this.queuedSet.add(key);
+    if (priority === 'high') {
+      this.precacheQueue.unshift({ text: cleanText, voice: activeVoice, priority });
+    } else {
+      this.precacheQueue.push({ text: cleanText, voice: activeVoice, priority });
     }
+
+    this.processPrecacheQueue().catch(() => {});
+  }
+
+  /**
+   * Batch pre-fetch multiple phrases in order of importance
+   */
+  async prefetchMany(
+    phrases: string[],
+    options?: { voice?: GeminiVoiceName; priority?: 'high' | 'normal' }
+  ) {
+    if (!this.hasApiKey() || this.voiceMode === 'native') return;
+    for (const phrase of phrases) {
+      if (phrase && phrase.trim()) {
+        this.prefetch(phrase, options?.voice, options?.priority || 'normal');
+      }
+    }
+  }
+
+  /**
+   * Clear low-priority pending items when user switches screens
+   */
+  clearPendingPrefetch() {
+    this.precacheQueue = this.precacheQueue.filter((item) => item.priority === 'high');
+  }
+
+  /**
+   * Sequential background worker: downloads 1 audio file at a time
+   * with 200ms spacing to prevent network congestion or API rate limits
+   */
+  private async processPrecacheQueue() {
+    if (this.precacheActive) return;
+    this.precacheActive = true;
+
+    while (this.precacheQueue.length > 0) {
+      if (this.voiceMode === 'native' || !this.hasApiKey()) {
+        this.precacheQueue = [];
+        this.queuedSet.clear();
+        break;
+      }
+
+      const item = this.precacheQueue.shift();
+      if (!item) break;
+
+      const activeVoice = item.voice || this.voice;
+      const key = `${activeVoice}:${item.text.toLowerCase()}`;
+
+      try {
+        const alreadyCached = await this.isCached(item.text, item.voice);
+        if (!alreadyCached) {
+          await this.generateSpeech(item.text, item.voice);
+          // 200ms spacing between cloud requests
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      } catch (err) {
+        console.warn('Pre-cache queue item error:', err);
+      } finally {
+        this.queuedSet.delete(key);
+      }
+    }
+
+    this.precacheActive = false;
   }
 
   /**
@@ -385,13 +475,13 @@ class GeminiTtsService {
     this.prewarmProgress = { cached: 0, total: phrasesToWarm.length };
     this.notifyListeners();
 
-    // Gently fetch 1 item every 600ms to avoid network throttling
+    // Queue in background
     for (const phrase of phrasesToWarm) {
       if ((this.voiceMode as VoiceMode) === 'native') break;
       const cached = await this.isCached(phrase);
       if (!cached) {
         await this.generateSpeech(phrase);
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 350));
       }
       this.prewarmProgress.cached += 1;
       this.notifyListeners();

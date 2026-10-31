@@ -65,16 +65,21 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
       playPromptAudio(currentQuestion.targetLetter, currentQuestion.type);
     }, 400);
 
-    // 2. Predictive background prefetch for the NEXT question!
+    // 2. Pre-cache current question's option letters (High Priority)
+    const currentOptionSounds = currentQuestion.options.map((o) => o.upper);
+    geminiTts.prefetchMany(currentOptionSounds, { priority: 'high' });
+
+    // 3. Predictive background prefetch for the NEXT question!
     // While the child answers the current question, Gemini AI audio for next question
-    // is downloaded and cached silently in the background (0ms delay when they advance!)
+    // (both prompt sentence and options) is downloaded and cached silently in the background
     const nextQ = nextQuestionRef.current;
     if (nextQ) {
-      const phrase =
+      const nextPrompt =
         nextQ.type === 'phonics'
           ? `Listen carefully. Which letter makes the sound: ${nextQ.targetLetter.phonics}? ... ${nextQ.targetLetter.phonics}!`
           : `Which letter starts the word: ${nextQ.targetLetter.exampleWord}?`;
-      geminiTts.prefetch(phrase);
+      geminiTts.prefetch(nextPrompt, undefined, 'normal');
+      nextQ.options.forEach((o) => geminiTts.prefetch(o.upper, undefined, 'normal'));
     }
 
     return () => clearTimeout(timer);

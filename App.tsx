@@ -37,6 +37,7 @@ export default function App() {
 
   const handleSelectTab = (tab: AppTab) => {
     if (tab === currentTab) return;
+    geminiTts.clearPendingPrefetch();
     setCurrentTab(tab);
     setTabHistory((prev) => [...prev, tab]);
   };

@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LetterItem } from '../data/alphabetData';
+import { LetterItem, ALPHABET_DATA } from '../data/alphabetData';
 import { soundService } from '../services/soundService';
 import { geminiTts } from '../services/geminiTtsService';
 
@@ -29,16 +29,39 @@ export const LetterDetailModal: React.FC<LetterDetailModalProps> = ({
 }) => {
   const [selectedCase, setSelectedCase] = useState<'upper' | 'lower'>('upper');
 
-  // Pre-fetch letter audio in background when modal is viewed
+  // Pre-fetch letter audio in background when modal is viewed,
+  // PLUS pre-cache the NEXT letter in the alphabet!
   useEffect(() => {
     if (visible && letter) {
-      geminiTts.prefetch(letter.upper);
+      // 1. Current letter's sounds (High Priority)
+      geminiTts.prefetch(letter.upper, undefined, 'high');
       geminiTts.prefetch(
-        `The letter ${letter.upper} says ${letter.phonics}, like in ${letter.exampleWord}. ${letter.phonics}!`
+        `The letter ${letter.upper} says ${letter.phonics}, like in ${letter.exampleWord}. ${letter.phonics}!`,
+        undefined,
+        'high'
       );
       geminiTts.prefetch(
-        `${letter.exampleWord}! ${letter.upper} is for ${letter.exampleWord}.`
+        `${letter.exampleWord}! ${letter.upper} is for ${letter.exampleWord}.`,
+        undefined,
+        'high'
       );
+
+      // 2. Upcoming letter's sounds (Next in sequence)
+      const currentIndex = ALPHABET_DATA.findIndex((l) => l.id === letter.id);
+      const nextLetter = ALPHABET_DATA[(currentIndex + 1) % ALPHABET_DATA.length];
+      if (nextLetter) {
+        geminiTts.prefetch(nextLetter.upper, undefined, 'normal');
+        geminiTts.prefetch(
+          `The letter ${nextLetter.upper} says ${nextLetter.phonics}, like in ${nextLetter.exampleWord}. ${nextLetter.phonics}!`,
+          undefined,
+          'normal'
+        );
+        geminiTts.prefetch(
+          `${nextLetter.exampleWord}! ${nextLetter.upper} is for ${nextLetter.exampleWord}.`,
+          undefined,
+          'normal'
+        );
+      }
     }
   }, [visible, letter]);
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,13 @@ interface WordBlendScreenProps {
   onAddStars: (amount: number) => void;
 }
 
+const getPhonicsSoundForChar = (char: string) => {
+  const found = ALPHABET_DATA.find(
+    (l) => l.upper === char.toUpperCase() || l.lower === char.toLowerCase()
+  );
+  return found ? found.phonics : char;
+};
+
 export const WordBlendScreen: React.FC<WordBlendScreenProps> = ({
   showHebrewHints,
   onAddStars,
@@ -24,12 +31,29 @@ export const WordBlendScreen: React.FC<WordBlendScreenProps> = ({
   const [blended, setBlended] = useState(false);
   const currentWord: SimpleWordItem = CVC_WORDS[currentIndex];
 
-  const getPhonicsSoundForChar = (char: string) => {
-    const found = ALPHABET_DATA.find(
-      (l) => l.upper === char.toUpperCase() || l.lower === char.toLowerCase()
-    );
-    return found ? found.phonics : char;
-  };
+  // Pre-cache sounds for the active CVC card (High Priority)
+  // PLUS the upcoming CVC card in the background!
+  useEffect(() => {
+    // 1. Current word phonemes and blended sentence
+    const currentPhonics = currentWord.letters.map((char) => getPhonicsSoundForChar(char));
+    const currentSpaced = currentPhonics.join(' ... ');
+    const currentBlendPhrase = `${currentSpaced} ... ${currentWord.word}! ${currentWord.word} means ${currentWord.hebrew}.`;
+
+    geminiTts.prefetchMany(currentPhonics, { priority: 'high' });
+    geminiTts.prefetch(currentBlendPhrase, undefined, 'high');
+
+    // 2. Upcoming CVC card
+    const nextIndex = (currentIndex + 1) % CVC_WORDS.length;
+    const nextWord = CVC_WORDS[nextIndex];
+    if (nextWord) {
+      const nextPhonics = nextWord.letters.map((char) => getPhonicsSoundForChar(char));
+      const nextSpaced = nextPhonics.join(' ... ');
+      const nextBlendPhrase = `${nextSpaced} ... ${nextWord.word}! ${nextWord.word} means ${nextWord.hebrew}.`;
+
+      geminiTts.prefetchMany(nextPhonics, { priority: 'normal' });
+      geminiTts.prefetch(nextBlendPhrase, undefined, 'normal');
+    }
+  }, [currentIndex, currentWord]);
 
   const handleTapLetter = async (char: string) => {
     // Speak the actual phonics sound of the letter

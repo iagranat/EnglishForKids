@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,20 @@ export const CaseMatchScreen: React.FC<CaseMatchScreenProps> = ({
 
   const currentPool = roundData.pool;
   const shuffledLower = roundData.shuffled;
+
+  // Pre-cache all sounds for current match round (High Priority)
+  // PLUS the upcoming round's letters in the background!
+  useEffect(() => {
+    // 1. Current round sounds
+    const currentSounds = currentPool.map((l) => l.upper);
+    currentSounds.push('Not quite, try again!');
+    geminiTts.prefetchMany(currentSounds, { priority: 'high' });
+
+    // 2. Upcoming round cards
+    const upcomingPool = getRoundData(round + 1).pool;
+    const upcomingSounds = upcomingPool.map((l) => l.upper);
+    geminiTts.prefetchMany(upcomingSounds, { priority: 'normal' });
+  }, [round, currentPool]);
 
   const startNewRound = (roundNum: number) => {
     setRound(roundNum);
