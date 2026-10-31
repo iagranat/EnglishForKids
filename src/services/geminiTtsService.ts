@@ -78,7 +78,7 @@ interface PrecacheItem {
 class GeminiTtsService {
   private apiKey: string = DEFAULT_API_KEY;
   private voice: GeminiVoiceName = DEFAULT_VOICE;
-  private voiceMode: VoiceMode = 'hybrid'; // Default to Smart Hybrid (0ms instant local + background AI caching)
+  private voiceMode: VoiceMode = 'gemini'; // Default to Studio Gemini AI Always (with seamless local fallback if offline/error)
   private memoryCache: Map<string, string> = new Map();
   private currentPlayer: AudioPlayer | null = null;
   private activePlaybackCleanup: (() => void) | null = null;

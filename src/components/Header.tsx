@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleHebrewHints,
   onOpenGeminiSettings,
   currentVoice,
-  voiceMode = 'hybrid',
+  voiceMode = 'gemini',
 }) => {
   return (
     <View style={styles.container}>

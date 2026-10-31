@@ -70,7 +70,7 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
   const [selectedVoice, setSelectedVoice] = useState<GeminiVoiceName>(() => geminiTts.getVoice());
   const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => geminiTts.getVoiceMode());
   const [previewingVoice, setPreviewingVoice] = useState<GeminiVoiceName | null>(null);
-  const [showKeyEditor, setShowKeyEditor] = useState(false);
+  const [showKeyEditor, setShowKeyEditor] = useState(() => !geminiTts.hasApiKey());
   const [cachedCount, setCachedCount] = useState(0);
   const [isPrewarming, setIsPrewarming] = useState(() => geminiTts.isPrewarmingActive());
 
@@ -140,6 +140,27 @@ export const GeminiSettingsModal: React.FC<GeminiSettingsModalProps> = ({
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            {/* Status Banner */}
+            {apiKey && apiKey.length > 10 ? (
+              <View style={styles.statusBanner}>
+                <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                <Text style={styles.statusText}>
+                  Gemini Studio AI Active (Connected)
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.statusBanner, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                onPress={() => setShowKeyEditor(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Text style={[styles.statusText, { color: '#991B1B', flex: 1 }]}>
+                  No API Key set. Using device voice. Tap to enter key!
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {/* Audio Engine Mode Selector */}
             <Text style={styles.sectionHeader}>Voice Latency & Engine Mode:</Text>
             <View style={styles.modeGrid}>
