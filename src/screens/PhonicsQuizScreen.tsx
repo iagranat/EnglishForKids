@@ -122,24 +122,11 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
     geminiTts.prefetch('Three in a row! Your ears are incredible!', undefined, 'normal');
     geminiTts.prefetch('Five in a row! You are an absolute phonics superstar!', undefined, 'normal');
 
-    // 3. Predictive prefetch for the NEXT question:
-    // Pre-cache upcoming card's prompt, correct phrase, and all 3 failure sounds!
+    // 3. Predictive prefetch for the NEXT question prompt:
     const nextQ = nextQuestionRef.current;
     if (nextQ) {
       const nextPrompt = getPromptText(nextQ.targetLetter, nextQ.type);
-      const nextCorrect = getCorrectResponseText(nextQ.targetLetter);
-      geminiTts.prefetchImmediate(nextPrompt);
-      geminiTts.prefetchImmediate(nextCorrect);
-      nextQ.options.forEach((opt) => {
-        if (opt.id !== nextQ.targetLetter.id) {
-          const nextIncorrect = getIncorrectResponseText(
-            opt,
-            nextQ.targetLetter,
-            nextQ.type
-          );
-          geminiTts.prefetchImmediate(nextIncorrect);
-        }
-      });
+      geminiTts.prefetch(nextPrompt, undefined, 'normal');
     }
 
     return () => {
@@ -178,25 +165,11 @@ export const PhonicsQuizScreen: React.FC<PhonicsQuizScreenProps> = ({
     setIsAnswerCorrect(isCorrect);
 
     if (isCorrect) {
-      // 🚀 CRITICAL ZERO-LATENCY PRE-FETCH:
-      // While the current card plays the ending sound (success chime + teacher congratulations, ~4-5s),
-      // download the NEXT card's prompt, correct phrase, AND all 3 failure sounds!
+      // Pre-fetch next question's prompt so it starts instantly when the next card appears
       const nextQ = nextQuestionRef.current;
       if (nextQ) {
         const nextPrompt = getPromptText(nextQ.targetLetter, nextQ.type);
-        const nextCorrect = getCorrectResponseText(nextQ.targetLetter);
         geminiTts.prefetchImmediate(nextPrompt);
-        geminiTts.prefetchImmediate(nextCorrect);
-        nextQ.options.forEach((opt) => {
-          if (opt.id !== nextQ.targetLetter.id) {
-            const nextIncorrect = getIncorrectResponseText(
-              opt,
-              nextQ.targetLetter,
-              nextQ.type
-            );
-            geminiTts.prefetchImmediate(nextIncorrect);
-          }
-        });
       }
 
       await soundService.playSuccessSound();

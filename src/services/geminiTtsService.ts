@@ -320,8 +320,19 @@ class GeminiTtsService {
 
     const fetchPromise = (async (): Promise<string | null> => {
       try {
-        // Prioritize reliable gemini-2.5-flash-preview-tts, then 3.8-flash-lite-tts, then 3.8-flash-tts
-        const models = ['gemini-2.5-flash-preview-tts', 'gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'];
+        // Multi-model failover pool (each model has an independent daily quota bucket):
+        // 1. gemini-3.1-flash-tts-preview (Fastest & newest Flash audio model)
+        // 2. gemini-2.5-flash-preview-tts (Reliable Flash audio model)
+        // 3. gemini-2.5-pro-preview-tts (Studio-grade Pro audio model)
+        // 4. gemini-3.8-flash-lite-tts (Ultra-light Flash model)
+        // 5. gemini-3.8-flash-tts (Standard Flash model)
+        const models = [
+          'gemini-3.1-flash-tts-preview',
+          'gemini-2.5-flash-preview-tts',
+          'gemini-2.5-pro-preview-tts',
+          'gemini-3.8-flash-lite-tts',
+          'gemini-3.8-flash-tts',
+        ];
         let base64Audio: string | null = null;
         let returnedMime = 'audio/wav';
 
@@ -360,8 +371,8 @@ class GeminiTtsService {
               }
             } else {
               if (res.status === 429) {
-                // Cooldown for 5 minutes so other requests bypass it immediately
-                this.modelCooldowns.set(model, Date.now() + 5 * 60 * 1000);
+                // Cooldown for 30 minutes so other requests bypass it immediately
+                this.modelCooldowns.set(model, Date.now() + 30 * 60 * 1000);
               }
               const errText = await res.text();
               console.warn(`Gemini TTS (${model}) error:`, errText);
